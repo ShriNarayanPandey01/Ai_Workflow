@@ -1,0 +1,73 @@
+{
+  "type": "human.approval@1",
+  "display_name": "Approval",
+  "description": "Pauses execution for a deterministic approve or reject decision.",
+  "category": "human",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "request",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": { "type": "object" },
+      "description": "JSON-serializable approval request payload."
+    }
+  ],
+  "outputs": [
+    {
+      "name": "decision",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": ["approved", "rejected"]
+          },
+          "data": {
+            "type": ["object", "null"]
+          }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["allowed_response_schema"],
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      },
+      "instructions": {
+        "type": "string",
+        "maxLength": 4000
+      },
+      "allowed_response_schema": {
+        "type": "object",
+        "minProperties": 1
+      }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": true
+  },
+  "ui": {
+    "icon": "user-check",
+    "color_token": "human",
+    "inspector": "approval"
+  }
+}

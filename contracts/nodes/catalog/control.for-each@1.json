@@ -1,0 +1,97 @@
+{
+  "type": "control.for-each@1",
+  "display_name": "For Each",
+  "description": "Applies a bounded subflow to each item in an input collection with controlled concurrency and failure behavior.",
+  "category": "control",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "items",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array" }
+        }
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "item",
+      "direction": "output",
+      "required": true,
+      "cardinality": "multiple",
+      "schema": {
+        "type": "object",
+        "required": ["item", "item_key", "index"],
+        "properties": {
+          "item": {},
+          "item_key": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    {
+      "name": "done",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["count"],
+        "properties": {
+          "count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["max_items", "concurrency", "item_timeout_seconds", "ordering", "failure_policy"],
+    "properties": {
+      "max_items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10000
+      },
+      "concurrency": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 256
+      },
+      "item_timeout_seconds": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 86400
+      },
+      "ordering": {
+        "type": "string",
+        "enum": ["preserve_input", "completion_order"]
+      },
+      "failure_policy": {
+        "type": "string",
+        "enum": ["fail_fast", "continue"]
+      }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "list",
+    "color_token": "control",
+    "inspector": "for-each"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "type": "ai.prompt-template@1",
+  "display_name": "Prompt Template",
+  "description": "Renders named variables into a prompt. Substitution only; no code execution.",
+  "category": "ai",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "variables",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": { "type": "object" }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "text",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["template"],
+    "properties": {
+      "template": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100000
+      },
+      "required_variables": {
+        "type": "array",
+        "items": { "type": "string" },
+        "maxItems": 64
+      }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "file-text",
+    "color_token": "ai",
+    "inspector": null
+  }
+}

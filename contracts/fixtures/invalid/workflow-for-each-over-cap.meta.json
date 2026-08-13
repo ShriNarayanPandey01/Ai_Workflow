@@ -1,0 +1,4 @@
+{
+  "description": "for-each rejects item lists exceeding effective max_items cap",
+  "expected_error_codes": ["RUNTIME_ERROR"]
+}

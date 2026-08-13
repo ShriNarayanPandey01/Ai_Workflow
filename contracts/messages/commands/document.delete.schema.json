@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/messages/commands/document.delete.schema.json",
+  "title": "DocumentDeletePayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dataset_id", "document_id"],
+  "properties": {
+    "dataset_id": { "type": "string", "format": "uuid" },
+    "document_id": { "type": "string", "format": "uuid" },
+    "delete_object": {
+      "type": "boolean",
+      "default": true
+    },
+    "delete_vectors": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

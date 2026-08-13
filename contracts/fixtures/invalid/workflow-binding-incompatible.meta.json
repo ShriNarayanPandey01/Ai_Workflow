@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-binding-incompatible.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["BINDING_INCOMPATIBLE"],
+    "notes": "Maps string field /order_id to whole object input port /."
+  }
+}

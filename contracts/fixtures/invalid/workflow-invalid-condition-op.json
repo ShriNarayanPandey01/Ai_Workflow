@@ -1,0 +1,4 @@
+{
+  "op": "eval",
+  "expression": "score > 0.5 && user.isAdmin"
+}

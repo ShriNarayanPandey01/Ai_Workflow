@@ -1,0 +1,10 @@
+{
+  "fixture": "envelope-invalid-message-type.json",
+  "schema": "messages/envelope.schema.json",
+  "expects": {
+    "json_schema_valid": false,
+    "semantic_valid": false,
+    "error_codes": ["ENVELOPE_MESSAGE_TYPE_UNKNOWN"],
+    "notes": "message_type must be one of the versioned MVP catalog values."
+  }
+}

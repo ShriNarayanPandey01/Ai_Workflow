@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "11111111-1111-4111-8111-111111111203",
+  "name": "Arbitrary Cycle Without Loop",
+  "input_schema": { "type": "object" },
+  "output_schema": { "type": "object" },
+  "nodes": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf01",
+      "type": "data.input@1",
+      "position": { "x": 0, "y": 0 },
+      "config": {}
+    },
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf02",
+      "type": "ai.prompt-template@1",
+      "position": { "x": 200, "y": 0 },
+      "config": { "template": "ping {{x}}", "required_variables": ["x"] }
+    },
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf03",
+      "type": "ai.prompt-template@1",
+      "position": { "x": 400, "y": 0 },
+      "config": { "template": "pong {{x}}", "required_variables": ["x"] }
+    }
+  ],
+  "edges": [
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb101",
+      "source_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf01",
+      "source_port": "value",
+      "target_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf02",
+      "target_port": "variables"
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb102",
+      "source_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf02",
+      "source_port": "text",
+      "target_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf03",
+      "target_port": "variables"
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb103",
+      "source_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf03",
+      "source_port": "text",
+      "target_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaf02",
+      "target_port": "variables"
+    }
+  ],
+  "execution_policy": {
+    "timeout_seconds": 60,
+    "max_node_executions": 10,
+    "max_parallel_nodes": 2,
+    "max_fan_out_items": 10,
+    "max_task_seconds": 60,
+    "max_provider_calls": 10,
+    "max_artifact_bytes": 1048576,
+    "default_retry": {
+      "max_attempts": 1,
+      "initial_backoff_ms": 100,
+      "max_backoff_ms": 1000,
+      "multiplier": 2,
+      "jitter": false
+    }
+  }
+}

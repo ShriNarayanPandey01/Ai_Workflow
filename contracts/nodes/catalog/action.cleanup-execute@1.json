@@ -1,0 +1,92 @@
+{
+  "type": "action.cleanup-execute@1",
+  "display_name": "Cleanup Execute",
+  "description": "Applies an approved unchanged cleanup plan with per-item idempotency, revalidation, and rollback metadata.",
+  "category": "action",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "plan",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["plan_id", "plan_hash"],
+        "properties": {
+          "plan_id": { "type": "string", "format": "uuid" },
+          "plan_hash": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["plan_id", "summary"],
+        "properties": {
+          "plan_id": { "type": "string", "format": "uuid" },
+          "summary": {
+            "type": "object",
+            "required": ["succeeded", "skipped", "failed"],
+            "properties": {
+              "succeeded": { "type": "integer", "minimum": 0 },
+              "skipped": { "type": "integer", "minimum": 0 },
+              "failed": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "rollback_metadata": { "type": "array" }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["connector_type", "require_approval"],
+    "properties": {
+      "connector_type": {
+        "type": "string",
+        "enum": ["dataset", "artifact_collection", "run_data", "external_connector"]
+      },
+      "require_approval": { "type": "boolean" },
+      "max_parallel_mutations": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 256
+      }
+    }
+  },
+  "credential_slots": [
+    {
+      "name": "connector",
+      "credential_type": "cleanup_connector",
+      "required": false
+    }
+  ],
+  "resource_slots": [
+    {
+      "name": "scope",
+      "resource_type": "other",
+      "required": false
+    }
+  ],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": true,
+    "execution_mode": "durable-task",
+    "emits_progress": true,
+    "resumable": true
+  },
+  "ui": {
+    "icon": "trash-2",
+    "color_token": "action",
+    "inspector": "cleanup-execute"
+  }
+}

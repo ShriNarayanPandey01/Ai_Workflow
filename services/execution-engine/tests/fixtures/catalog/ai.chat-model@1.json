@@ -1,0 +1,73 @@
+{
+  "type": "ai.chat-model@1",
+  "display_name": "Chat Model",
+  "description": "Invokes an OpenAI-compatible chat provider with bounded tokens and timeouts.",
+  "category": "ai",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "prompt",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" }
+        }
+      },
+      "default_bindings": [
+        {
+          "target_path": "/text",
+          "match": {
+            "source_ports": ["text", "response"],
+            "source_paths": ["/text", "/response/text"]
+          }
+        }
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "response",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "required": ["model"],
+    "properties": {
+      "model": { "type": "string" }
+    }
+  },
+  "credential_slots": [
+    {
+      "name": "provider",
+      "credential_type": "openai_compatible",
+      "required": true
+    }
+  ],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": true,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "message-square",
+    "color_token": "ai",
+    "inspector": null
+  }
+}

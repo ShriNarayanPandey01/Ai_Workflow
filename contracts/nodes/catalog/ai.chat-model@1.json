@@ -1,0 +1,85 @@
+{
+  "type": "ai.chat-model@1",
+  "display_name": "Chat Model",
+  "description": "Invokes an OpenAI-compatible chat provider with bounded tokens and timeouts.",
+  "category": "ai",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "prompt",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "messages": { "type": "array" }
+        }
+      },
+      "default_bindings": [
+        {
+          "target_path": "/text",
+          "match": {
+            "source_ports": ["text", "response"],
+            "source_paths": ["/text", "/response/text"]
+          }
+        }
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "response",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": { "type": "string" },
+          "usage": { "type": "object" }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["model"],
+    "properties": {
+      "model": { "type": "string", "minLength": 1, "maxLength": 128 },
+      "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+      "max_output_tokens": { "type": "integer", "minimum": 1, "maximum": 128000 },
+      "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 600 },
+      "response_format": {
+        "type": "string",
+        "enum": ["text", "json_object"],
+        "default": "text"
+      }
+    }
+  },
+  "credential_slots": [
+    {
+      "name": "provider",
+      "credential_type": "openai_compatible",
+      "required": true,
+      "description": "OpenAI-compatible API credential."
+    }
+  ],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": true,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "message-square",
+    "color_token": "ai",
+    "inspector": null
+  }
+}

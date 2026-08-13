@@ -1,0 +1,31 @@
+{
+  "message_id": "33333333-3333-4333-8333-333333333302",
+  "message_type": "document.ingest",
+  "schema_version": "1.0",
+  "occurred_at": "2026-07-24T12:50:00Z",
+  "correlation_id": "77777777-7777-4777-8777-777777777701",
+  "causation_id": null,
+  "idempotency_key": "document-ingest:77777777-7777-4777-8777-777777777701:1",
+  "tenant": {
+    "workspace_id": "55555555-5555-4555-8555-555555555501",
+    "project_id": "66666666-6666-4666-8666-666666666601"
+  },
+  "subject": {
+    "document_id": "77777777-7777-4777-8777-777777777701"
+  },
+  "sequence": null,
+  "payload": {
+    "dataset_id": "88888888-8888-4888-8888-888888888801",
+    "document_id": "77777777-7777-4777-8777-777777777701",
+    "object_key": "datasets/88888888-8888-4888-8888-888888888801/docs/77777777-7777-4777-8777-777777777701.pdf",
+    "content_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "media_type": "application/pdf",
+    "size_bytes": 24576,
+    "version": 3,
+    "original_name": "Quarterly Report.pdf",
+    "embedding_config": {
+      "provider": "openai",
+      "model": "text-embedding-3-large"
+    }
+  }
+}

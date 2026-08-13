@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-unsupported-node-version.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["NODE_VERSION_UNSUPPORTED"],
+    "notes": "data.input@99 matches the type pattern but is not in the node catalog."
+  }
+}

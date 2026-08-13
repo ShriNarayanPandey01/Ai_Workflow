@@ -1,0 +1,38 @@
+{
+  "type": "data.input@1",
+  "display_name": "Input",
+  "description": "Exposes validated workflow run input as the graph entry value.",
+  "category": "data",
+  "execution_owner": "execution-engine",
+  "inputs": [],
+  "outputs": [
+    {
+      "name": "value",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": { "type": "object" },
+      "description": "Workflow input object validated against input_schema."
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "log-in",
+    "color_token": "data",
+    "inspector": null
+  }
+}

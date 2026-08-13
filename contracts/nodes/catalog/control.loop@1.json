@@ -1,0 +1,74 @@
+{
+  "type": "control.loop@1",
+  "display_name": "Loop",
+  "description": "Explicit bounded loop with body and done outputs. Arbitrary cycles are invalid.",
+  "category": "control",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "iteration",
+      "direction": "input",
+      "required": true,
+      "cardinality": "multiple",
+      "schema": { "type": "object" },
+      "description": "Initial entry and loop-back target."
+    }
+  ],
+  "outputs": [
+    {
+      "name": "body",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": { "type": "object" }
+    },
+    {
+      "name": "done",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": { "type": "object" }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["max_iterations"],
+    "properties": {
+      "max_iterations": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000
+      },
+      "exit_condition": {
+        "oneOf": [
+          { "type": "null" },
+          {
+            "$ref": "../../workflow/condition.schema.json"
+          }
+        ],
+        "description": "Optional ConditionExpression AST."
+      },
+      "on_limit": {
+        "type": "string",
+        "enum": ["done", "fail"],
+        "default": "done"
+      }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "repeat",
+    "color_token": "control",
+    "inspector": "loop"
+  }
+}

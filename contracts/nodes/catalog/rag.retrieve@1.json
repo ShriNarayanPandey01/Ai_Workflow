@@ -1,0 +1,107 @@
+{
+  "type": "rag.retrieve@1",
+  "display_name": "RAG Retrieve",
+  "description": "Runs scoped similarity search against one authorized dataset and returns ordered chunks with safe metadata.",
+  "category": "rag",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "query",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": { "type": "string" }
+        }
+      },
+      "description": "Search query text."
+    }
+  ],
+  "outputs": [
+    {
+      "name": "results",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["chunks"],
+        "properties": {
+          "chunks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["chunk_id", "document_id", "text", "score"],
+              "properties": {
+                "chunk_id": { "type": "string", "format": "uuid" },
+                "document_id": { "type": "string", "format": "uuid" },
+                "text": { "type": "string" },
+                "score": { "type": "number" },
+                "metadata": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["top_k"],
+    "properties": {
+      "top_k": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "score_threshold": {
+        "type": ["number", "null"],
+        "minimum": 0,
+        "maximum": 1
+      },
+      "metadata_filters": {
+        "type": "array",
+        "maxItems": 32,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "operator", "value"],
+          "properties": {
+            "field": { "type": "string", "maxLength": 128 },
+            "operator": {
+              "type": "string",
+              "enum": ["eq", "neq", "in", "contains"]
+            },
+            "value": {}
+          }
+        }
+      }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [
+    {
+      "name": "dataset",
+      "resource_type": "dataset",
+      "required": true,
+      "description": "Authorized dataset to search."
+    }
+  ],
+  "capabilities": {
+    "retryable": true,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "search",
+    "color_token": "rag",
+    "inspector": "rag-retrieve"
+  }
+}

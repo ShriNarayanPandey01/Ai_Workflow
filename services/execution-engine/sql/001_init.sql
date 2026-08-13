@@ -1,0 +1,1 @@
+-- Placeholder schema file for Docker build. Migrations added in later features.

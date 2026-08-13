@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-unknown-top-level.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": false,
+    "semantic_valid": false,
+    "error_codes": ["SCHEMA_ADDITIONAL_PROPERTY"],
+    "notes": "additionalProperties is false on WorkflowDefinition for major version 1.0."
+  }
+}

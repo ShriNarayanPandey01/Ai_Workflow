@@ -1,0 +1,87 @@
+{
+  "type": "market.momentum-screen@1",
+  "display_name": "Momentum Screen",
+  "description": "Deterministically scores and ranks securities from validated market data using a versioned formula.",
+  "category": "market",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "market_data",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": { "type": "object" }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "rankings",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["as_of", "formula_version", "candidates"],
+        "properties": {
+          "as_of": { "type": "string", "format": "date-time" },
+          "formula_version": { "type": "string" },
+          "candidates": { "type": "array" },
+          "warnings": { "type": "array" }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["formula_version", "top_n", "tie_policy"],
+    "properties": {
+      "formula_version": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "top_n": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000
+      },
+      "factor_weights": {
+        "type": "object",
+        "additionalProperties": { "type": "number" }
+      },
+      "min_history_days": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5000
+      },
+      "min_average_daily_volume": {
+        "type": ["number", "null"],
+        "minimum": 0
+      },
+      "volatility_penalty": {
+        "type": ["number", "null"],
+        "minimum": 0
+      },
+      "tie_policy": {
+        "type": "string",
+        "enum": ["stable_input_order", "symbol_asc", "score_then_symbol"]
+      }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "activity",
+    "color_token": "market",
+    "inspector": "momentum-screen"
+  }
+}

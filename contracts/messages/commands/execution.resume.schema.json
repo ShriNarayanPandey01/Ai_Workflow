@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/messages/commands/execution.resume.schema.json",
+  "title": "ExecutionResumePayload",
+  "description": "Resume a WAITING run after human approval/review or durable task completion.",
+  "$defs": {
+    "jsonValue": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["waiting_reason", "interrupt_id", "decision"],
+  "properties": {
+    "waiting_reason": {
+      "type": "string",
+      "enum": ["HUMAN", "TASK"]
+    },
+    "interrupt_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "approval_id": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "format": "uuid" }
+      ]
+    },
+    "task_id": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "format": "uuid" }
+      ]
+    },
+    "decision": {
+      "$ref": "#/$defs/jsonValue",
+      "description": "JSON-serializable resume payload (approval decision, edited value, or task result summary)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "waiting_reason": { "const": "HUMAN" } },
+        "required": ["waiting_reason"]
+      },
+      "then": {
+        "required": ["approval_id"],
+        "properties": {
+          "approval_id": { "type": "string", "format": "uuid" },
+          "task_id": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "waiting_reason": { "const": "TASK" } },
+        "required": ["waiting_reason"]
+      },
+      "then": {
+        "required": ["task_id"],
+        "properties": {
+          "approval_id": { "type": "null" },
+          "task_id": { "type": "string", "format": "uuid" }
+        }
+      }
+    }
+  ]
+}

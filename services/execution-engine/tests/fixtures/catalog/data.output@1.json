@@ -1,0 +1,37 @@
+{
+  "type": "data.output@1",
+  "display_name": "Output",
+  "description": "Maps final state into the declared workflow output schema.",
+  "category": "data",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "value",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": { "type": "object" }
+    }
+  ],
+  "outputs": [],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "log-out",
+    "color_token": "data",
+    "inspector": null
+  }
+}

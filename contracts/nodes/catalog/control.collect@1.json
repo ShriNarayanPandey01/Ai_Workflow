@@ -1,0 +1,78 @@
+{
+  "type": "control.collect@1",
+  "display_name": "Collect",
+  "description": "Aggregates bounded fan-out item results into ordered successes, failures, skips, and summary metadata.",
+  "category": "control",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "items",
+      "direction": "input",
+      "required": true,
+      "cardinality": "multiple",
+      "schema": { "type": "object" }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["summary", "successes", "failures", "skipped"],
+        "properties": {
+          "summary": {
+            "type": "object",
+            "required": ["total", "completed", "failed", "skipped"],
+            "properties": {
+              "total": { "type": "integer", "minimum": 0 },
+              "completed": { "type": "integer", "minimum": 0 },
+              "failed": { "type": "integer", "minimum": 0 },
+              "skipped": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "successes": { "type": "array" },
+          "failures": { "type": "array" },
+          "skipped": { "type": "array" },
+          "artifact_ref": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["ordering", "artifact_threshold_bytes"],
+    "properties": {
+      "ordering": {
+        "type": "string",
+        "enum": ["preserve_input", "completion_order"]
+      },
+      "artifact_threshold_bytes": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1073741824
+      }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "inbox",
+    "color_token": "control",
+    "inspector": "collect"
+  }
+}

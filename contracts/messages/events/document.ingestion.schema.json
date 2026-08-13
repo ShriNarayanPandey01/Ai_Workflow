@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/messages/events/document.ingestion.schema.json",
+  "title": "DocumentIngestionEventPayloads",
+  "$defs": {
+    "started": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "dataset_id", "status"],
+      "properties": {
+        "document_id": { "type": "string", "format": "uuid" },
+        "dataset_id": { "type": "string", "format": "uuid" },
+        "status": { "const": "ingesting" },
+        "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "completed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "dataset_id", "status", "chunk_count"],
+      "properties": {
+        "document_id": { "type": "string", "format": "uuid" },
+        "dataset_id": { "type": "string", "format": "uuid" },
+        "status": { "const": "ready" },
+        "version": { "type": "integer", "minimum": 1 },
+        "chunk_count": { "type": "integer", "minimum": 0 },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "dataset_id", "status", "error_code"],
+      "properties": {
+        "document_id": { "type": "string", "format": "uuid" },
+        "dataset_id": { "type": "string", "format": "uuid" },
+        "status": { "const": "failed" },
+        "error_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "message": { "type": "string", "maxLength": 2048 }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/started" },
+    { "$ref": "#/$defs/completed" },
+    { "$ref": "#/$defs/failed" }
+  ]
+}

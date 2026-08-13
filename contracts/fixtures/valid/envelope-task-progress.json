@@ -1,0 +1,42 @@
+{
+  "message_id": "33333333-3333-4333-8333-333333333303",
+  "message_type": "task.progress",
+  "schema_version": "1.0",
+  "occurred_at": "2026-07-24T12:55:00Z",
+  "correlation_id": "44444444-4444-4444-8444-444444444401",
+  "causation_id": "33333333-3333-4333-8333-333333333301",
+  "idempotency_key": "task-progress:99999999-9999-4999-8999-999999999901:7",
+  "tenant": {
+    "workspace_id": "55555555-5555-4555-8555-555555555501",
+    "project_id": "66666666-6666-4666-8666-666666666601"
+  },
+  "subject": {
+    "workflow_id": "11111111-1111-4111-8111-111111111101",
+    "workflow_version_id": "22222222-2222-4222-8222-222222222201",
+    "run_id": "44444444-4444-4444-8444-444444444401",
+    "node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
+    "task_id": "99999999-9999-4999-8999-999999999901"
+  },
+  "sequence": 7,
+  "payload": {
+    "task_id": "99999999-9999-4999-8999-999999999901",
+    "status": "RUNNING",
+    "stage": "fetching_sources",
+    "progress": {
+      "total": 12,
+      "completed": 5,
+      "failed": 1,
+      "skipped": 0,
+      "percent": 50
+    },
+    "usage": {
+      "elapsed_seconds": 42.5,
+      "provider_calls": 9,
+      "tokens": 2300,
+      "estimated_cost": 0.19
+    },
+    "warnings": [
+      "one source timed out and will be retried by the task worker"
+    ]
+  }
+}

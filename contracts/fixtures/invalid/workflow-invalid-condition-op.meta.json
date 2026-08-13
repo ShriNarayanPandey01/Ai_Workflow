@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-invalid-condition-op.json",
+  "schema": "workflow/condition.schema.json",
+  "expects": {
+    "json_schema_valid": false,
+    "semantic_valid": false,
+    "error_codes": ["CONDITION_OPERATOR_UNKNOWN"],
+    "notes": "Only the structured AST operators are allowed. eval/text expressions are rejected by schema."
+  }
+}
