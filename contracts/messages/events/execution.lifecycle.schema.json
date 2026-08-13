@@ -53,6 +53,12 @@
         "status": { "const": "WAITING" },
         "waiting_reason": { "type": "string", "enum": ["HUMAN", "TASK"] },
         "interrupt_id": { "type": "string", "format": "uuid" },
+        "approval_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "format": "uuid" }
+          ]
+        },
         "node_id": { "type": "string", "format": "uuid" },
         "approval_request": {
           "oneOf": [

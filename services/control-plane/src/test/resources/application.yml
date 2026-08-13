@@ -1,0 +1,36 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+  quartz:
+    job-store-type: memory
+    auto-startup: false
+    properties:
+      org.quartz.jobStore.isClustered: false
+
+aiw:
+  jwt:
+    secret: development-only-jwt-secret-must-be-at-least-32-bytes
+  refresh:
+    hash-secret: development-only-refresh-hash-secret
+    cookie-secure: false
+  contracts:
+    root: ${user.dir}/../../contracts
+  credentials:
+    kek: development-only-credential-kek-must-be-32b
+  service-jwt:
+    secret: development-only-jwt-secret-must-be-at-least-32-bytes
+  messaging:
+    enabled: false
+  storage:
+    enabled: false
+
+management:
+  health:
+    rabbit:
+      enabled: false
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db

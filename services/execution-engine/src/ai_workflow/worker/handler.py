@@ -96,6 +96,7 @@ async def _publish_outcome(
             interrupt_id=outcome.interrupt_id,
             node_id=outcome.node_id,
             approval_request=outcome.approval_request,
+            approval_id=outcome.approval_id,
         )
         return
 

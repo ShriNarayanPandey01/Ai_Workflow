@@ -1,0 +1,547 @@
+{
+  "info": {
+    "name": "AI Workflow Control Plane F6-F11",
+    "description": "Setup (auth, project, linear draft, publish) then credentials, executions, SSE, triggers, and approvals. Import the Local environment. F11 decision needs a HUMAN wait from the execution-worker (or a projected waiting event).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" }
+  ],
+  "item": [
+    {
+      "name": "Setup",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const email = `user+${Date.now()}@example.com`;",
+                  "pm.environment.set('email', email);",
+                  "pm.environment.set('password', 'password1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('accessToken', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"displayName\": \"Ada Lovelace\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "Create project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('projectId', pm.response.json().projectId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"F6-F11\"\n}" },
+            "url": "{{baseUrl}}/api/v1/projects"
+          }
+        },
+        {
+          "name": "Create workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('workflowId', pm.response.json().workflowId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Linear pass-through\"\n}" },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows"
+          }
+        },
+        {
+          "name": "Get draft",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('ok', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('baseRevision', String(pm.response.json().revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/draft"
+          }
+        },
+        {
+          "name": "Put draft (linear fixture)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const def = {",
+                  "  schema_version: '1.0',",
+                  "  workflow_id: pm.environment.get('workflowId'),",
+                  "  workflow_version_id: null,",
+                  "  name: 'Pass Through Linear',",
+                  "  input_schema: { type: 'object', additionalProperties: false, required: ['order_id'], properties: { order_id: { type: 'string' }, priority: { type: 'string' } } },",
+                  "  output_schema: { type: 'object', additionalProperties: true },",
+                  "  nodes: [",
+                  "    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', type: 'data.input@1', position: { x: 80, y: 120 }, config: {}, credential_refs: {}, resource_refs: {} },",
+                  "    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', type: 'data.output@1', position: { x: 360, y: 120 }, config: {}, credential_refs: {}, resource_refs: {} }",
+                  "  ],",
+                  "  edges: [",
+                  "    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', source_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', source_port: 'value', target_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', target_port: 'value', label: null, condition: null }",
+                  "  ],",
+                  "  execution_policy: { timeout_seconds: 300, max_node_executions: 50, max_parallel_nodes: 4, max_fan_out_items: 100, max_task_seconds: 600, max_provider_calls: 100, max_artifact_bytes: 10485760, max_estimated_cost: null, default_retry: { max_attempts: 3, initial_backoff_ms: 500, max_backoff_ms: 10000, multiplier: 2, jitter: true } }",
+                  "};",
+                  "pm.variables.set('linearDefinition', JSON.stringify(def));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('saved', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('baseRevision', String(pm.response.json().revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseRevision\": {{baseRevision}},\n  \"definition\": {{linearDefinition}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/draft"
+          }
+        },
+        {
+          "name": "Validate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/validate"
+          }
+        },
+        {
+          "name": "Publish",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('published', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('workflowVersionId', pm.response.json().versionId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/publish"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F6 Credentials",
+      "item": [
+        {
+          "name": "Create credential",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('credentialId', json.credentialId);",
+                  "pm.test('masked', () => {",
+                  "  pm.expect(json.maskedHint).to.be.a('string');",
+                  "  pm.expect(JSON.stringify(json)).to.not.include('sk-live-secret');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"openai_compatible\",\n  \"name\": \"openai\",\n  \"data\": { \"apiKey\": \"sk-live-secret\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/credentials"
+          }
+        },
+        {
+          "name": "List credentials (no plaintext)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('ok', () => pm.response.to.have.status(200));",
+                  "pm.test('no secret', () => pm.expect(pm.response.text()).to.not.include('sk-live-secret'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/credentials"
+          }
+        },
+        {
+          "name": "Update credential",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"openai-prod\",\n  \"data\": { \"apiKey\": \"sk-rotated\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/credentials/{{credentialId}}"
+          }
+        },
+        {
+          "name": "Internal resolve without service JWT (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('denied', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nodeId\": \"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1\",\n  \"slots\": [\"provider\"],\n  \"workflowVersionId\": null\n}"
+            },
+            "url": "{{baseUrl}}/internal/v1/executions/{{runId}}/credentials:resolve"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F8 Executions",
+      "item": [
+        {
+          "name": "Start draft run",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": ["pm.environment.set('idempotencyKey', 'draft-' + Date.now());"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('accepted', () => pm.response.to.have.status(202));",
+                  "pm.environment.set('runId', pm.response.json().runId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"draft\",\n  \"input\": { \"order_id\": \"o-1\" },\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/executions"
+          }
+        },
+        {
+          "name": "Start draft duplicate idempotency",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('same run', () => {",
+                  "  pm.response.to.have.status(202);",
+                  "  pm.expect(pm.response.json().runId).to.eql(pm.environment.get('runId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"draft\",\n  \"input\": { \"order_id\": \"o-2\" },\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/executions"
+          }
+        },
+        {
+          "name": "List executions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/executions"
+          }
+        },
+        {
+          "name": "Get execution",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('ok', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/executions/{{runId}}"
+          }
+        },
+        {
+          "name": "Cancel execution",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('cancelling', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql('CANCELLING');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/executions/{{runId}}/cancel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F9 SSE",
+      "item": [
+        {
+          "name": "Stream events",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Accept", "value": "text/event-stream" },
+              { "key": "Last-Event-ID", "value": "0" }
+            ],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/executions/{{runId}}/events"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F10 Triggers",
+      "item": [
+        {
+          "name": "Create webhook trigger",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('triggerPublicId', json.publicId);",
+                  "pm.environment.set('triggerSecret', json.secret);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"webhook\",\n  \"name\": \"orders\",\n  \"workflowVersionId\": \"{{workflowVersionId}}\",\n  \"config\": {}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/triggers"
+          }
+        },
+        {
+          "name": "Webhook bad secret (opaque 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('opaque', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"order_id\": \"hook-bad\"\n}" },
+            "url": "{{baseUrl}}/hooks/v1/{{triggerPublicId}}/wrong-secret"
+          }
+        },
+        {
+          "name": "Webhook good secret",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('accepted', () => pm.response.to.have.status(202));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"order_id\": \"hook-ok\"\n}" },
+            "url": "{{baseUrl}}/hooks/v1/{{triggerPublicId}}/{{triggerSecret}}"
+          }
+        },
+        {
+          "name": "Create schedule trigger",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"schedule\",\n  \"name\": \"nightly\",\n  \"workflowVersionId\": \"{{workflowVersionId}}\",\n  \"config\": {\n    \"cron\": \"0 0 * * * ?\",\n    \"timeZone\": \"UTC\",\n    \"input\": { \"order_id\": \"sched\" }\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/triggers"
+          }
+        },
+        {
+          "name": "List triggers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/triggers"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F11 Approvals",
+      "item": [
+        {
+          "name": "List approvals",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('ok', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json();",
+                  "if (items.length) {",
+                  "  pm.environment.set('approvalId', items[0].approvalId);",
+                  "  pm.environment.set('runId', items[0].runId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/approvals"
+          }
+        },
+        {
+          "name": "Decide approval",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVE\",\n  \"payload\": { \"ok\": true }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/executions/{{runId}}/approvals/{{approvalId}}/decision"
+          }
+        }
+      ]
+    }
+  ]
+}
