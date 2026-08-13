@@ -49,6 +49,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | **Includes** | Encrypt/store/list/update/delete; masked responses; internal resolve |
 | **Key APIs** | `/api/v1/projects/{projectId}/credentials`, `POST /internal/v1/executions/{runId}/credentials:resolve` |
 | **Done when** | AES-GCM + key_id + AAD; plaintext never in list/API logs; resolve checks the **run snapshot** (draft or published); `workflowVersionId` may be null; service auth required internally |
+| **Status** | Done |
 
 ## F7 — Messaging backbone
 
@@ -56,6 +57,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | --- | --- |
 | **Includes** | Outbox table + publisher; event consumer + inbox; envelope validation |
 | **Done when** | Run+outbox atomic; SKIP LOCKED publisher; duplicate events no-op; DLQ path for poison messages; commands `sequence: null`; `causation_id` set when a parent message exists |
+| **Status** | Done |
 
 ## F8 — Execution lifecycle
 
@@ -64,6 +66,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | **Includes** | Start draft/published run; list/detail; cancel; state machine |
 | **Key APIs** | `POST /api/v1/projects/{projectId}/workflows/{workflowId}/executions`, run get/list/cancel |
 | **Done when** | Legal transitions only (`QUEUED`, `RUNNING`, `WAITING`, `SUCCEEDED`, `FAILED`, `CANCELLING`, `CANCELLED`, `TIMED_OUT`); cancel → `CANCELLING` + outbox `execution.cancel`; unique `idempotency_key` per accepted run; redacted I/O in read model; `202` with `runId` |
+| **Status** | Done |
 
 ## F9 — SSE run stream
 
@@ -72,6 +75,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | **Includes** | Authenticated SSE with replay |
 | **Key APIs** | `GET /api/v1/projects/{projectId}/executions/{runId}/events` |
 | **Done when** | `Last-Event-ID` replay from `execution_events`; sequence ordering; heartbeats; close on terminal |
+| **Status** | Done |
 
 ## F10 — Triggers
 
@@ -80,6 +84,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | **Includes** | Webhook, schedule, and production-manual **trigger rows** pinned to a published version. Draft test runs are F8 (`mode=draft`), not a trigger pin. |
 | **Key APIs** | `/api/v1/projects/{projectId}/workflows/{workflowId}/triggers`; `POST /hooks/v1/{publicId}/{secret}` |
 | **Done when** | Clustered Quartz JDBC survives restart without double-fire; webhook secret hashed; schedule dispatches one idempotent run command |
+| **Status** | Done |
 
 ## F11 — Approvals
 
@@ -88,6 +93,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | **Includes** | Persist pending from `execution.waiting` with `waiting_reason=HUMAN` only; decision → resume command |
 | **Key APIs** | `GET /api/v1/approvals`, `POST /api/v1/projects/{projectId}/executions/{runId}/approvals/{approvalId}/decision` |
 | **Done when** | Authorize per run; atomic resolve; resume only for HUMAN wait; never `execution.resume` for TASK; audit recorded |
+| **Status** | Done |
 
 ## F12 — Datasets and documents
 
@@ -96,6 +102,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | **Includes** | Dataset CRUD; signed upload; confirm → ingest outbox to **rag-worker**; delete queue |
 | **Key APIs** | Dataset/document endpoints; `POST /internal/v1/documents/{documentId}/download-intent` |
 | **Done when** | MIME/size validation; server-generated keys; status projected from `document.ingestion.*`; ingest/delete not routed to execution-worker |
+| **Status** | Done |
 
 ## F13 — Tasks and artifacts (read model)
 
@@ -104,6 +111,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | **Includes** | Project task progress/items; cancel; signed artifact **download** (workers write objects) |
 | **Key APIs** | `/api/v1/projects/{projectId}/tasks`, `/api/v1/projects/{projectId}/artifacts/{id}/download` |
 | **Done when** | Events update progress/budgets; user cancel task → `task.cancel` **and** parent `execution.cancel`; never publish `task.start`; download short-lived and project-scoped |
+| **Status** | Done |
 
 ## F14 — Audit and observability
 
@@ -111,6 +119,7 @@ Checklist for developers. Each feature lists scope, key types/endpoints, and don
 | --- | --- |
 | **Includes** | Audit for auth/publish/credential/trigger/run/approval; structured logs; metrics; readiness |
 | **Done when** | Correlation IDs on responses; no secrets in logs; readiness checks DB + broker |
+| **Status** | Done |
 
 ## Non-features (control plane)
 

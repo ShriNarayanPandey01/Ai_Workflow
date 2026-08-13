@@ -1,0 +1,100 @@
+spring:
+  application:
+    name: control-plane
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aiw}
+    username: ${AIW_DATABASE_USERNAME:aiw}
+    password: ${AIW_DATABASE_PASSWORD:aiw}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:aiw}
+    password: ${SPRING_RABBITMQ_PASSWORD:aiw}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+  quartz:
+    job-store-type: jdbc
+    jdbc:
+      initialize-schema: never
+    properties:
+      org.quartz.scheduler.instanceId: AUTO
+      org.quartz.jobStore.isClustered: true
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+      org.quartz.jobStore.tablePrefix: QRTZ_
+      org.quartz.jobStore.misfireThreshold: 60000
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,rabbit
+
+aiw:
+  jwt:
+    secret: ${AIW_JWT_SECRET:development-only-jwt-secret-must-be-at-least-32-bytes}
+    access-ttl: PT10M
+  refresh:
+    hash-secret: ${AIW_REFRESH_HASH_SECRET:development-only-refresh-hash-secret}
+    ttl: PT720H
+    cookie-name: aiw_refresh
+    cookie-secure: ${AIW_REFRESH_COOKIE_SECURE:false}
+    cookie-path: /api/v1/auth
+  contracts:
+    root: ${AIW_CONTRACTS_ROOT:../../contracts}
+  limits:
+    max-graph-nodes: ${AIW_MAX_GRAPH_NODES:500}
+    max-loop-iterations: ${AIW_MAX_LOOP_ITERATIONS:100}
+    max-run-seconds: ${AIW_MAX_RUN_SECONDS:86400}
+    max-fan-out-items: ${AIW_MAX_FAN_OUT_ITEMS:10000}
+  auth:
+    rate-limit-per-minute: 20
+  credentials:
+    kek: ${AIW_CREDENTIAL_KEK:development-only-credential-kek-must-be-32b}
+    key-id: ${AIW_CREDENTIAL_KEY_ID:v1}
+  service-jwt:
+    secret: ${AIW_SERVICE_JWT_SECRET:development-only-jwt-secret-must-be-at-least-32-bytes}
+    ttl: PT5M
+    audience: control-plane
+  messaging:
+    enabled: ${AIW_MESSAGING_ENABLED:true}
+    publish-interval: PT2S
+    publish-batch-size: 20
+  storage:
+    enabled: ${AIW_S3_ENABLED:true}
+    endpoint: ${AIW_S3_ENDPOINT:http://localhost:9000}
+    bucket: ${AIW_S3_BUCKET:aiw}
+    access-key: ${AIW_S3_ACCESS_KEY:aiw}
+    secret-key: ${AIW_S3_SECRET_KEY:aiwsecret}
+    region: ${AIW_S3_REGION:us-east-1}
+    path-style: true
+    presign-ttl: PT15M
+
+logging:
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level correlationId=%X{correlationId} %logger{36} - %msg%n"

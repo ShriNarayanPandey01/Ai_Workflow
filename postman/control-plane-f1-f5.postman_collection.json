@@ -1,0 +1,498 @@
+{
+  "info": {
+    "name": "AI Workflow Control Plane F1-F5",
+    "description": "Exercises identity, projects, node catalog, drafts, validate, and publish. Import the Local environment and run the collection in folder order. Refresh uses the aiw_refresh cookie.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" }
+  ],
+  "item": [
+    {
+      "name": "F1 Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const email = `user+${Date.now()}@example.com`;",
+                  "pm.environment.set('email', email);",
+                  "pm.environment.set('password', 'password1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('accessToken', json.accessToken);",
+                  "pm.test('access token present', () => pm.expect(json.accessToken).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"displayName\": \"Ada Lovelace\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "Login (wrong password)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('opaque unauthorized', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().code).to.eql('INVALID_CREDENTIALS');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"wrong-password\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('ok', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('accessToken', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('ok', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          }
+        },
+        {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('rotates access token', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('accessToken', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/auth/refresh"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F2 Projects",
+      "item": [
+        {
+          "name": "Create project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('projectId', pm.response.json().projectId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo project\",\n  \"description\": \"F1-F5 smoke\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects"
+          }
+        },
+        {
+          "name": "List projects",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects?limit=20"
+          }
+        },
+        {
+          "name": "Get project",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}"
+          }
+        },
+        {
+          "name": "Get unknown project (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('not found', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/00000000-0000-4000-8000-000000000099"
+          }
+        },
+        {
+          "name": "Patch project",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F3 Catalog",
+      "item": [
+        {
+          "name": "Get node catalog",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('ok', () => pm.response.to.have.status(200));",
+                  "pm.test('has items', () => pm.expect(pm.response.json().items.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/node-catalog"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F4 Drafts",
+      "item": [
+        {
+          "name": "Create workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('workflowId', pm.response.json().workflowId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Linear pass-through\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows"
+          }
+        },
+        {
+          "name": "Get draft",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('ok', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('baseRevision', String(pm.response.json().revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/draft"
+          }
+        },
+        {
+          "name": "Put draft (linear fixture)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const def = {",
+                  "  schema_version: '1.0',",
+                  "  workflow_id: pm.environment.get('workflowId'),",
+                  "  workflow_version_id: null,",
+                  "  name: 'Pass Through Linear',",
+                  "  input_schema: { type: 'object', additionalProperties: false, required: ['order_id'], properties: { order_id: { type: 'string' }, priority: { type: 'string' } } },",
+                  "  output_schema: { type: 'object', additionalProperties: true },",
+                  "  nodes: [",
+                  "    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', type: 'data.input@1', position: { x: 80, y: 120 }, config: {}, credential_refs: {}, resource_refs: {} },",
+                  "    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', type: 'data.output@1', position: { x: 360, y: 120 }, config: {}, credential_refs: {}, resource_refs: {} }",
+                  "  ],",
+                  "  edges: [",
+                  "    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', source_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', source_port: 'value', target_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', target_port: 'value', label: null, condition: null }",
+                  "  ],",
+                  "  execution_policy: { timeout_seconds: 300, max_node_executions: 50, max_parallel_nodes: 4, max_fan_out_items: 100, max_task_seconds: 600, max_provider_calls: 100, max_artifact_bytes: 10485760, max_estimated_cost: null, default_retry: { max_attempts: 3, initial_backoff_ms: 500, max_backoff_ms: 10000, multiplier: 2, jitter: true } }",
+                  "};",
+                  "pm.variables.set('linearDefinition', JSON.stringify(def));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('saved', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('baseRevision', String(pm.response.json().revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseRevision\": {{baseRevision}},\n  \"definition\": {{linearDefinition}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/draft"
+          }
+        },
+        {
+          "name": "Put draft stale revision (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('conflict', () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseRevision\": 1,\n  \"definition\": {\n    \"schema_version\": \"1.0\",\n    \"workflow_id\": \"{{workflowId}}\",\n    \"name\": \"stale\",\n    \"input_schema\": { \"type\": \"object\" },\n    \"output_schema\": { \"type\": \"object\" },\n    \"nodes\": [{ \"id\": \"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1\", \"type\": \"data.input@1\", \"position\": { \"x\": 0, \"y\": 0 }, \"config\": {} }],\n    \"edges\": [],\n    \"execution_policy\": { \"timeout_seconds\": 300, \"max_node_executions\": 50, \"max_parallel_nodes\": 4, \"max_fan_out_items\": 100, \"max_task_seconds\": 600, \"max_provider_calls\": 100, \"max_artifact_bytes\": 10485760, \"max_estimated_cost\": null, \"default_retry\": { \"max_attempts\": 3, \"initial_backoff_ms\": 500, \"max_backoff_ms\": 10000, \"multiplier\": 2, \"jitter\": true } }\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/draft"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F5 Validate and Publish",
+      "item": [
+        {
+          "name": "Validate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('valid', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().valid).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/validate"
+          }
+        },
+        {
+          "name": "Publish",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('published', () => pm.response.to.have.status(201));",
+                  "pm.expect(pm.response.json().versionNumber).to.eql(1);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/publish"
+          }
+        },
+        {
+          "name": "List versions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/versions"
+          }
+        },
+        {
+          "name": "Get version 1",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/versions/1"
+          }
+        },
+        {
+          "name": "Validate arbitrary cycle (422)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const def = {",
+                  "  schema_version: '1.0',",
+                  "  workflow_id: pm.environment.get('workflowId'),",
+                  "  name: 'cycle',",
+                  "  input_schema: { type: 'object' },",
+                  "  output_schema: { type: 'object' },",
+                  "  nodes: [",
+                  "    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', type: 'data.input@1', position: { x: 0, y: 0 }, config: {} },",
+                  "    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10', type: 'ai.prompt-template@1', position: { x: 100, y: 0 }, config: { template: 'a {{text}}' } },",
+                  "    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11', type: 'ai.prompt-template@1', position: { x: 200, y: 0 }, config: { template: 'b {{text}}' } },",
+                  "    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', type: 'data.output@1', position: { x: 300, y: 0 }, config: {} }",
+                  "  ],",
+                  "  edges: [",
+                  "    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb10', source_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', source_port: 'value', target_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10', target_port: 'variables' },",
+                  "    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb11', source_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10', source_port: 'text', target_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11', target_port: 'variables' },",
+                  "    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb12', source_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11', source_port: 'text', target_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10', target_port: 'variables' },",
+                  "    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb13', source_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11', source_port: 'text', target_node_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', target_port: 'value' }",
+                  "  ],",
+                  "  execution_policy: { timeout_seconds: 300, max_node_executions: 50, max_parallel_nodes: 4, max_fan_out_items: 100, max_task_seconds: 600, max_provider_calls: 100, max_artifact_bytes: 10485760, max_estimated_cost: null, default_retry: { max_attempts: 3, initial_backoff_ms: 500, max_backoff_ms: 10000, multiplier: 2, jitter: true } }",
+                  "};",
+                  "pm.variables.set('cycleBody', JSON.stringify({ baseRevision: Number(pm.environment.get('baseRevision')), definition: def }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{{cycleBody}}" },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/draft"
+          }
+        },
+        {
+          "name": "Validate after cycle (expect 422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid cycle', () => {",
+                  "  pm.response.to.have.status(422);",
+                  "  pm.expect(pm.response.json().code).to.eql('WORKFLOW_INVALID');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/workflows/{{workflowId}}/validate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "F1 Logout",
+      "item": [
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/api/v1/auth/logout"
+          }
+        }
+      ]
+    }
+  ]
+}

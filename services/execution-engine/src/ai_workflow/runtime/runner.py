@@ -119,6 +119,7 @@ class WorkflowRunWaiting:
     state: WorkflowState
     node_id: UUID
     approval_request: dict[str, JsonValue] | None
+    approval_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -530,6 +531,7 @@ async def _execute_loop(
                 state=state,
                 node_id=interrupt.node_id,
                 approval_request=interrupt.approval_request,
+                approval_id=interrupt.approval_id,
             )
         except TransientNodeError as exc:
             msg = (

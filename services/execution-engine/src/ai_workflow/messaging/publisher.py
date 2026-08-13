@@ -150,6 +150,7 @@ class EventPublisher:
         interrupt_id: UUID,
         node_id: UUID | None = None,
         approval_request: dict[str, JsonValue] | None = None,
+        approval_id: UUID | None = None,
     ) -> int:
         payload: dict[str, JsonValue] = {
             "status": "WAITING",
@@ -158,6 +159,8 @@ class EventPublisher:
         }
         if node_id is not None:
             payload["node_id"] = str(node_id)
+        if approval_id is not None:
+            payload["approval_id"] = str(approval_id)
         if approval_request is not None:
             payload["approval_request"] = approval_request
         else:
