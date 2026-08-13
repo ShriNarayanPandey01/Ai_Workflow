@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -28,9 +27,13 @@ from ai_workflow.runtime.checkpoint import (
     Checkpointer,
     InMemoryCheckpointer,
 )
-from ai_workflow.runtime.control_flow import collect_is_ready, handle_foreach_after_execute
+from ai_workflow.runtime.control_flow import (
+    collect_is_ready,
+    handle_foreach_after_execute,
+    resume_incomplete_foreach_frames,
+)
 from ai_workflow.runtime.definition_store import DefinitionStore
-from ai_workflow.runtime.execute_node import execute_with_retry
+from ai_workflow.runtime.execute_node import execute_with_retry, sleep_backoff
 from ai_workflow.runtime.for_each_runtime import COLLECT_INJECT_KEY
 from ai_workflow.runtime.interrupt import WorkflowInterrupt
 from ai_workflow.runtime.outputs import NodeOutputError
@@ -159,16 +162,6 @@ def _parse_definition(
     return workflow_from_dict(definition)
 
 
-def _outgoing_by_port(
-    definition: WorkflowDefinition,
-) -> dict[str, dict[str, list[WorkflowEdge]]]:
-    """Index workflow edges by source node id and source port."""
-    result: dict[str, dict[str, list[WorkflowEdge]]] = defaultdict(lambda: defaultdict(list))
-    for edge in definition.edges:
-        result[str(edge.source_node_id)][edge.source_port].append(edge)
-    return result
-
-
 def _is_ready(
     node: WorkflowNode,
     incoming: list[WorkflowEdge],
@@ -265,24 +258,46 @@ async def _checkpoint_state(
     await checkpointer.save(thread_id=run_id, state=snapshot)
 
 
-def _collect_inject_ready(node: WorkflowNode, state: WorkflowState | None) -> bool:
-    """Return whether a collect node may run (runtime item injection present)."""
-    return collect_is_ready(node, state)
+def _enqueue_if_ready(
+    node_id: str,
+    *,
+    workflow: WorkflowDefinition,
+    nodes_by_id: dict[str, WorkflowNode],
+    scheduler: SchedulerSnapshot,
+    state: WorkflowState | None,
+) -> None:
+    """Enqueue a node when its required inputs (and collect inject) are ready."""
+    if node_id in scheduler.in_pending:
+        return
+    node = nodes_by_id[node_id]
+    if not collect_is_ready(node, state):
+        return
+    incoming = workflow.incoming_edges(node.id)
+    if _is_ready(node, incoming, scheduler.produced):
+        scheduler.pending.append(node_id)
+        scheduler.in_pending.add(node_id)
 
 
-async def _sleep_backoff(backoff_ms: int, *, jitter: bool) -> None:
-    """Sleep for the backoff interval, optionally applying jitter.
-
-    Jitter is derived from the event-loop clock rather than a PRNG so the
-    runner stays free of ``random`` (disallowed in some sandboxes) while
-    still spreading retries across the window.
-    """
-    delay = max(0.0, backoff_ms / 1000.0)
-    if jitter and delay > 0:
-        frac = asyncio.get_event_loop().time() % 1.0
-        delay = delay * (0.5 + 0.5 * frac)
-    if delay > 0:
-        await asyncio.sleep(delay)
+def _resolve_scope_ids(
+    *,
+    workflow: WorkflowDefinition,
+    state: WorkflowState,
+    workspace_id: UUID | None,
+    project_id: UUID | None,
+) -> tuple[UUID, UUID]:
+    resolved_workspace = workspace_id
+    resolved_project = project_id
+    if resolved_workspace is None:
+        raw_workspace = state.runtime.get("_workspace_id")
+        resolved_workspace = (
+            UUID(str(raw_workspace)) if raw_workspace is not None else workflow.workflow_id
+        )
+    if resolved_project is None:
+        raw_project = state.runtime.get("_project_id")
+        resolved_project = (
+            UUID(str(raw_project)) if raw_project is not None else workflow.workflow_id
+        )
+    return resolved_workspace, resolved_project
 
 
 async def _execute_loop(
@@ -309,9 +324,9 @@ async def _execute_loop(
     """Run the workflow graph until a terminal outcome is reached.
 
     Pops ready nodes from ``scheduler.pending``, resolves their inputs,
-    executes the registered node executor, checkpoints state after every
-    step, and enqueues downstream nodes when all required inputs are
-    produced.
+    executes the registered node executor, enqueues downstream nodes when
+    all required inputs are produced, then checkpoints so a crash can
+    resume from the next pending node.
 
     Returns:
         WorkflowRunCompleted when exactly one ``data.output@1`` node runs.
@@ -323,21 +338,54 @@ async def _execute_loop(
             contract violation, or exceeding max_node_executions.
     """
     def try_enqueue(node_id: str) -> None:
-        if node_id in scheduler.in_pending:
-            return
-        node = nodes_by_id[node_id]
-        if not _collect_inject_ready(node, state):
-            return
-        incoming = workflow.incoming_edges(node.id)
-        if _is_ready(node, incoming, scheduler.produced):
-            scheduler.pending.append(node_id)
-            scheduler.in_pending.add(node_id)
+        _enqueue_if_ready(
+            node_id,
+            workflow=workflow,
+            nodes_by_id=nodes_by_id,
+            scheduler=scheduler,
+            state=state,
+        )
 
-    async def  is_cancelled() -> str | None:
+    async def is_cancelled() -> str | None:
         if cancel_registry is None:
             return None
         request = await cancel_registry.is_cancelled(run_id)
         return request.reason if request is not None else None
+
+    resolved_workspace_id, resolved_project_id = _resolve_scope_ids(
+        workflow=workflow,
+        state=state,
+        workspace_id=workspace_id,
+        project_id=project_id,
+    )
+
+    cancelled = await resume_incomplete_foreach_frames(
+        workflow=workflow,
+        registry=registry,
+        outgoing=outgoing,
+        nodes_by_id=nodes_by_id,
+        state=state,
+        scheduler=scheduler,
+        checkpointer=checkpointer,
+        run_id=run_id,
+        workspace_id=resolved_workspace_id,
+        project_id=resolved_project_id,
+        credential_resolver=credential_resolver,
+        cancel_registry=cancel_registry,
+        max_payload_bytes=max_payload_bytes,
+        max_parallel_nodes=min(
+            workflow.execution_policy.max_parallel_nodes,
+            max_parallel_nodes,
+        ),
+        try_enqueue=try_enqueue,
+        checkpoint_state=_checkpoint_state,
+        is_cancelled=is_cancelled,
+        hooks=hooks,
+        cancelled_factory=WorkflowRunCancelled,
+        deadline=deadline,
+    )
+    if cancelled is not None:
+        return cancelled
 
     while scheduler.pending:
         cancel_reason = await is_cancelled()
@@ -450,19 +498,6 @@ async def _execute_loop(
             )
             return WorkflowRunCancelled(run_id=run_id, reason=cancel_reason, state=state)
 
-        resolved_workspace_id = workspace_id
-        resolved_project_id = project_id
-        if resolved_workspace_id is None:
-            raw_workspace = state.runtime.get("_workspace_id")
-            resolved_workspace_id = (
-                UUID(str(raw_workspace)) if raw_workspace is not None else workflow.workflow_id
-            )
-        if resolved_project_id is None:
-            raw_project = state.runtime.get("_project_id")
-            resolved_project_id = (
-                UUID(str(raw_project)) if raw_project is not None else workflow.workflow_id
-            )
-
         if hooks is not None:
             await hooks.on_node_started(node_id=node.id, node_type=node.type)
 
@@ -503,7 +538,7 @@ async def _execute_loop(
                 multiplier=retry_policy.multiplier,
                 max_backoff_ms=retry_policy.max_backoff_ms,
                 jitter=retry_policy.jitter,
-                sleep_backoff=_sleep_backoff,
+                sleep_backoff=sleep_backoff,
             )
         except WorkflowInterrupt as interrupt:
             save_interrupt(
@@ -597,6 +632,12 @@ async def _execute_loop(
                 continue
             state.runtime[key] = value
 
+        for port in result.outputs:
+            if node.type == "control.for-each@1" and port == "item":
+                continue
+            for edge in outgoing.get(node_id, {}).get(port, []):
+                try_enqueue(str(edge.target_node_id))
+
         await _checkpoint_state(
             checkpointer=checkpointer,
             run_id=run_id,
@@ -632,17 +673,12 @@ async def _execute_loop(
                     is_cancelled=is_cancelled,
                     hooks=hooks,
                     cancelled_factory=WorkflowRunCancelled,
+                    deadline=deadline,
                 )
             except RuntimeError as exc:
                 raise WorkflowRunError(str(exc)) from exc
             if cancelled is not None:
                 return cancelled
-
-        for port in result.outputs:
-            if node.type == "control.for-each@1" and port == "item":
-                continue
-            for edge in outgoing.get(node_id, {}).get(port, []):
-                try_enqueue(str(edge.target_node_id))
 
     if len(scheduler.executed_output_ids) != 1:
         msg = (
@@ -674,19 +710,14 @@ def _init_scheduler(
     if produced is not None:
         scheduler.produced = set(produced)
 
-    def try_enqueue(node_id: str) -> None:
-        if node_id in scheduler.in_pending:
-            return
-        node = nodes_by_id[node_id]
-        if not _collect_inject_ready(node, state):
-            return
-        incoming = workflow.incoming_edges(node.id)
-        if _is_ready(node, incoming, scheduler.produced):
-            scheduler.pending.append(node_id)
-            scheduler.in_pending.add(node_id)
-
     for node_id in nodes_by_id:
-        try_enqueue(node_id)
+        _enqueue_if_ready(
+            node_id,
+            workflow=workflow,
+            nodes_by_id=nodes_by_id,
+            scheduler=scheduler,
+            state=state,
+        )
     return scheduler
 
 
@@ -913,6 +944,8 @@ async def resume_workflow(
     max_payload_bytes: int = 1_048_576,
     max_loop_iterations: int = 100,
     max_fan_out_items: int = 1000,
+    max_node_executions_cap: int = 10_000,
+    max_parallel_nodes_cap: int = 32,
     cancel_registry: CancelRegistry | None = None,
     credential_resolver: CredentialResolver | None = None,
     task_dispatcher: TaskDispatcher | None = None,
@@ -999,18 +1032,15 @@ async def resume_workflow(
 
     ir = get_workflow_ir(workflow)
 
-    def try_enqueue(target_id: str) -> None:
-        if target_id in scheduler.in_pending:
-            return
-        node = ir.nodes_by_id[target_id]
-        incoming = workflow.incoming_edges(node.id)
-        if _is_ready(node, incoming, scheduler.produced):
-            scheduler.pending.append(target_id)
-            scheduler.in_pending.add(target_id)
-
     for port in outputs:
         for edge in ir.outgoing.get(node_id, {}).get(port, []):
-            try_enqueue(str(edge.target_node_id))
+            _enqueue_if_ready(
+                str(edge.target_node_id),
+                workflow=workflow,
+                nodes_by_id=ir.nodes_by_id,
+                scheduler=scheduler,
+                state=state,
+            )
 
     return await _execute_loop(
         workflow=workflow,
@@ -1024,11 +1054,14 @@ async def resume_workflow(
         nodes_by_id=ir.nodes_by_id,
         max_node_executions=min(
             workflow.execution_policy.max_node_executions,
-            10_000,
+            max_node_executions_cap,
         ),
         max_payload_bytes=max_payload_bytes,
         cancel_registry=cancel_registry,
         credential_resolver=credential_resolver,
         task_dispatcher=task_dispatcher,
-        max_parallel_nodes=min(workflow.execution_policy.max_parallel_nodes, 32),
+        max_parallel_nodes=min(
+            workflow.execution_policy.max_parallel_nodes,
+            max_parallel_nodes_cap,
+        ),
     )

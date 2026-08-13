@@ -2,7 +2,6 @@
 #   services/rag/src/ai_workflow_rag/providers/embedding.py
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import math
 import struct
@@ -10,6 +9,9 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
+
+from ai_workflow.providers.retry import retry_provider_call
+from ai_workflow.security.http_client import create_async_client
 
 EMBEDDING_DIMENSIONS = 1536
 
@@ -68,33 +70,18 @@ class OpenAICompatibleEmbeddingProvider:
             await self._client.aclose()
 
     async def embed(self, request: EmbeddingRequest) -> list[list[float]]:
-        client = self._client or httpx.AsyncClient()
+        client = self._client or create_async_client()
         if self._client is None:
             self._client = client
 
-        attempt = 0
-        backoff_ms = self._initial_backoff_ms
-        last_error: Exception | None = None
-
-        while attempt < self._max_attempts:
-            attempt += 1
-            try:
-                return await self._request_once(client, request)
-            except TransientEmbeddingError as exc:
-                last_error = exc
-                if attempt >= self._max_attempts:
-                    break
-                await asyncio.sleep(backoff_ms / 1000.0)
-                backoff_ms = min(int(backoff_ms * self._multiplier), self._max_backoff_ms)
-            except httpx.TransportError as exc:
-                last_error = TransientEmbeddingError(str(exc))
-                if attempt >= self._max_attempts:
-                    break
-                await asyncio.sleep(backoff_ms / 1000.0)
-                backoff_ms = min(int(backoff_ms * self._multiplier), self._max_backoff_ms)
-
-        assert last_error is not None
-        raise last_error
+        return await retry_provider_call(
+            lambda: self._request_once(client, request),
+            max_attempts=self._max_attempts,
+            initial_backoff_ms=self._initial_backoff_ms,
+            max_backoff_ms=self._max_backoff_ms,
+            multiplier=self._multiplier,
+            transient_error=TransientEmbeddingError,
+        )
 
     async def _request_once(
         self,

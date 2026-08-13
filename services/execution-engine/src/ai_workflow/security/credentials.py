@@ -5,6 +5,7 @@ from uuid import UUID
 
 import httpx
 
+from ai_workflow.security.http_client import create_async_client
 from ai_workflow.security.service_auth import ServiceAuthProvider
 
 # Production workers should set AIW_CONTROL_PLANE_INTERNAL_URL so
@@ -150,7 +151,7 @@ def build_credential_resolver(
         from ai_workflow.security.service_auth import StaticServiceAuth
 
         auth = StaticServiceAuth(internal_auth_token) if internal_auth_token else None
-        http_client = client or httpx.AsyncClient(timeout=30.0)
+        http_client = client or create_async_client()
         return HttpCredentialResolver(
             base_url=control_plane_url,
             client=http_client,

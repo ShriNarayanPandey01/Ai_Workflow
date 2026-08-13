@@ -9,6 +9,8 @@ import httpx
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.security.ssrf import Resolver, SsrfError, validate_url
 
+DEFAULT_HTTPX_TIMEOUT = httpx.Timeout(30.0)
+
 _REDIRECT_STATUS_CODES = frozenset({301, 302, 303, 307, 308})
 
 _DEFAULT_RESPONSE_HEADER_ALLOWLIST = frozenset(
@@ -23,6 +25,16 @@ _DEFAULT_RESPONSE_HEADER_ALLOWLIST = frozenset(
         "retry-after",
     }
 )
+
+
+def create_async_client(
+    *,
+    timeout: httpx.Timeout | float | None = None,
+) -> httpx.AsyncClient:
+    """Build a shared-process httpx client with an explicit timeout."""
+    return httpx.AsyncClient(
+        timeout=DEFAULT_HTTPX_TIMEOUT if timeout is None else timeout
+    )
 
 
 class ResponseTooLargeError(ValueError):

@@ -13,6 +13,7 @@ import httpx
 
 from ai_workflow.config.settings import Settings
 from ai_workflow.contracts.common.types import JsonValue
+from ai_workflow.log_context import execution_log_extra
 from ai_workflow.messaging.envelope import (
     parse_execution_cancel,
     parse_execution_resume,
@@ -41,13 +42,26 @@ from ai_workflow.runtime.runner import (
 )
 from ai_workflow.runtime.scheduler_state import DEFINITION_KEY, clear_interrupt, get_interrupt
 from ai_workflow.security.credentials import CredentialResolver, build_credential_resolver
-from ai_workflow.security.http_client import SafeHttpClient
+from ai_workflow.security.http_client import SafeHttpClient, create_async_client
 from ai_workflow.security.redaction import redact_value
 from ai_workflow.worker.task_dispatcher import RabbitTaskDispatcher
 
 logger = logging.getLogger(__name__)
+_WORKER_ROLE = "execution-worker"
 
-logger = logging.getLogger(__name__)
+
+def _log_extra(
+    *,
+    run_id: UUID | str | None = None,
+    correlation_id: UUID | str | None = None,
+    message_id: UUID | str | None = None,
+) -> dict[str, Any]:
+    return execution_log_extra(
+        role=_WORKER_ROLE,
+        run_id=run_id,
+        correlation_id=correlation_id,
+        message_id=message_id,
+    )
 
 
 class MessageInFlightError(RuntimeError):
@@ -194,7 +208,15 @@ class ExecutionCommandHandler:
             message_type=parsed.envelope.message_type,
         )
         if claim is ClaimResult.DUPLICATE_COMPLETED:
-            logger.info("Skipping duplicate completed message %s", parsed.envelope.message_id)
+            logger.info(
+                "Skipping duplicate completed message %s",
+                parsed.envelope.message_id,
+                extra=_log_extra(
+                    run_id=parsed.subject.run_id,
+                    correlation_id=parsed.envelope.correlation_id,
+                    message_id=parsed.envelope.message_id,
+                ),
+            )
             return
         if claim is ClaimResult.DUPLICATE_IN_FLIGHT:
             msg = f"Message {parsed.envelope.message_id} is still processing"
@@ -224,6 +246,11 @@ class ExecutionCommandHandler:
                 logger.info(
                     "Skipping execution.start for waiting run %s",
                     parsed.subject.run_id,
+                    extra=_log_extra(
+                        run_id=parsed.subject.run_id,
+                        correlation_id=parsed.envelope.correlation_id,
+                        message_id=parsed.envelope.message_id,
+                    ),
                 )
                 await self._inbox.mark_completed(message_id=parsed.envelope.message_id)
                 return
@@ -308,7 +335,15 @@ class ExecutionCommandHandler:
             message_type=parsed.envelope.message_type,
         )
         if claim is ClaimResult.DUPLICATE_COMPLETED:
-            logger.info("Skipping duplicate completed message %s", parsed.envelope.message_id)
+            logger.info(
+                "Skipping duplicate completed message %s",
+                parsed.envelope.message_id,
+                extra=_log_extra(
+                    run_id=parsed.subject.run_id,
+                    correlation_id=parsed.envelope.correlation_id,
+                    message_id=parsed.envelope.message_id,
+                ),
+            )
             return
         if claim is ClaimResult.DUPLICATE_IN_FLIGHT:
             msg = f"Message {parsed.envelope.message_id} is still processing"
@@ -356,6 +391,8 @@ class ExecutionCommandHandler:
                 contracts_root=self._settings.contracts_root,
                 max_payload_bytes=self._settings.max_payload_bytes,
                 max_loop_iterations=self._settings.max_loop_iterations,
+                max_node_executions_cap=self._settings.max_node_executions,
+                max_parallel_nodes_cap=self._settings.max_parallel_nodes,
                 cancel_registry=self._cancel_registry,
                 credential_resolver=self._credential_resolver,
                 task_dispatcher=dispatcher,
@@ -413,7 +450,15 @@ class ExecutionCommandHandler:
             message_type=parsed.envelope.message_type,
         )
         if claim is ClaimResult.DUPLICATE_COMPLETED:
-            logger.info("Skipping duplicate completed message %s", parsed.envelope.message_id)
+            logger.info(
+                "Skipping duplicate completed message %s",
+                parsed.envelope.message_id,
+                extra=_log_extra(
+                    run_id=parsed.subject.run_id,
+                    correlation_id=parsed.envelope.correlation_id,
+                    message_id=parsed.envelope.message_id,
+                ),
+            )
             return
         if claim is ClaimResult.DUPLICATE_IN_FLIGHT:
             msg = f"Message {parsed.envelope.message_id} is still processing"
@@ -488,6 +533,11 @@ class ExecutionCommandHandler:
                 "Deferring %s for run %s; parent not waiting yet",
                 envelope.message_type,
                 subject.run_id,
+                extra=_log_extra(
+                    run_id=subject.run_id,
+                    correlation_id=envelope.correlation_id,
+                    message_id=envelope.message_id,
+                ),
             )
             await self._inbox.mark_failed(message_id=envelope.message_id)
             raise MessageNotReadyError(
@@ -497,6 +547,8 @@ class ExecutionCommandHandler:
         payload = envelope.payload
         task_id_raw = payload.get("task_id") or subject.task_id
         if envelope.message_type == "task.failed":
+            clear_interrupt(state)
+            await checkpointer.save(thread_id=subject.run_id, state=state)
             await publisher.publish_execution_failed(
                 code="TASK_FAILED",
                 message=str((payload.get("error") or {}).get("message", "task failed")),
@@ -537,6 +589,8 @@ class ExecutionCommandHandler:
                 contracts_root=self._settings.contracts_root,
                 max_payload_bytes=self._settings.max_payload_bytes,
                 max_loop_iterations=self._settings.max_loop_iterations,
+                max_node_executions_cap=self._settings.max_node_executions,
+                max_parallel_nodes_cap=self._settings.max_parallel_nodes,
                 cancel_registry=self._cancel_registry,
                 credential_resolver=self._credential_resolver,
                 task_dispatcher=dispatcher,
@@ -603,7 +657,7 @@ def build_execution_handler(
     credential_resolver: CredentialResolver | None = None,
 ) -> ExecutionCommandHandler:
     """Construct a fully wired handler for the execution worker process."""
-    http_client = httpx.AsyncClient()
+    http_client = create_async_client()
     if registry is None:
         safe_http_client = SafeHttpClient(http_client)
         action_key_store = PostgresActionKeyStore(pool)
