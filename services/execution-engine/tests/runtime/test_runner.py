@@ -10,13 +10,18 @@ import pytest
 from ai_workflow.nodes.base import TransientNodeError
 from ai_workflow.runtime.bootstrap import build_runner_registry
 from ai_workflow.runtime.checkpoint import InMemoryCheckpointer
-from ai_workflow.runtime.for_each_runtime import load_foreach_frames
+from ai_workflow.runtime.for_each_runtime import (
+    COLLECT_INJECT_KEY,
+    load_foreach_frames,
+    save_foreach_frames,
+)
 from ai_workflow.runtime.runner import (
     WorkflowRunCompleted,
     WorkflowRunError,
     continue_workflow_from_checkpoint,
     run_workflow,
 )
+from ai_workflow.runtime.scheduler_state import load_scheduler, save_scheduler
 
 
 class RecordingHooks:
@@ -281,6 +286,128 @@ async def test_for_each_checkpoint_resume_skips_completed_items(
         contracts_root=repo_contracts_root,
     )
     assert isinstance(resumed, WorkflowRunCompleted)
+
+
+FOREACH_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaad02"
+COLLECT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaad04"
+OUTPUT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaad05"
+
+
+async def _rewind_foreach_checkpoint(
+    checkpointer: InMemoryCheckpointer,
+    run_id: UUID,
+    *,
+    drop_frame: bool,
+    pending_last_item: bool,
+) -> None:
+    state = await checkpointer.load(thread_id=run_id)
+    assert state is not None
+    frames = load_foreach_frames(state)
+    frame = frames[FOREACH_ID]
+    if pending_last_item:
+        last_key = str(frame.envelopes[-1]["item_key"])
+        frame.item_status[last_key] = "pending"
+        frame.item_results.pop(last_key, None)
+        frame.item_errors.pop(last_key, None)
+        frame.completion_seq.pop(last_key, None)
+    frame.completed = False
+    if drop_frame:
+        frames.pop(FOREACH_ID)
+    else:
+        frames[FOREACH_ID] = frame
+    save_foreach_frames(state, frames)
+    state.runtime.pop(COLLECT_INJECT_KEY, None)
+    state.node_outputs.pop(COLLECT_ID, None)
+    state.node_outputs.pop(OUTPUT_ID, None)
+    scheduler = load_scheduler(state)
+    assert scheduler is not None
+    scheduler.executed_output_ids.discard(OUTPUT_ID)
+    scheduler.pending.clear()
+    scheduler.in_pending.clear()
+    scheduler.produced = {
+        item for item in scheduler.produced if item[0] not in {COLLECT_ID, OUTPUT_ID}
+    }
+    for key in list(scheduler.production_order):
+        if key[0] in {COLLECT_ID, OUTPUT_ID}:
+            del scheduler.production_order[key]
+    save_scheduler(state, scheduler)
+    await checkpointer.save(thread_id=run_id, state=state)
+
+
+@pytest.mark.asyncio
+async def test_for_each_continue_resumes_incomplete_items(
+    repo_contracts_root: Path,
+    workflow_for_each_collect_definition: dict,
+) -> None:
+    registry = build_runner_registry(repo_contracts_root)
+    checkpointer = InMemoryCheckpointer()
+    run_id = UUID("33333333-3333-4333-8333-333333333302")
+
+    completed = await run_workflow(
+        workflow_for_each_collect_definition,
+        {"items": ["alpha", "beta"]},
+        registry=registry,
+        checkpointer=checkpointer,
+        run_id=run_id,
+        contracts_root=repo_contracts_root,
+    )
+    assert isinstance(completed, WorkflowRunCompleted)
+
+    await _rewind_foreach_checkpoint(
+        checkpointer, run_id, drop_frame=False, pending_last_item=True
+    )
+
+    resumed = await continue_workflow_from_checkpoint(
+        workflow_for_each_collect_definition,
+        run_id=run_id,
+        registry=registry,
+        checkpointer=checkpointer,
+        contracts_root=repo_contracts_root,
+    )
+    assert isinstance(resumed, WorkflowRunCompleted)
+    frames = load_foreach_frames(resumed.state)
+    assert frames[FOREACH_ID].completed is True
+    assert all(status == "success" for status in frames[FOREACH_ID].item_status.values())
+    summary = resumed.output.get("summary") if isinstance(resumed.output, dict) else None
+    assert isinstance(summary, dict)
+    assert summary["total"] == 2
+    assert summary["completed"] == 2
+
+
+@pytest.mark.asyncio
+async def test_for_each_continue_rebuilds_missing_frame(
+    repo_contracts_root: Path,
+    workflow_for_each_collect_definition: dict,
+) -> None:
+    registry = build_runner_registry(repo_contracts_root)
+    checkpointer = InMemoryCheckpointer()
+    run_id = UUID("33333333-3333-4333-8333-333333333303")
+
+    completed = await run_workflow(
+        workflow_for_each_collect_definition,
+        {"items": ["alpha", "beta"]},
+        registry=registry,
+        checkpointer=checkpointer,
+        run_id=run_id,
+        contracts_root=repo_contracts_root,
+    )
+    assert isinstance(completed, WorkflowRunCompleted)
+
+    await _rewind_foreach_checkpoint(
+        checkpointer, run_id, drop_frame=True, pending_last_item=False
+    )
+
+    resumed = await continue_workflow_from_checkpoint(
+        workflow_for_each_collect_definition,
+        run_id=run_id,
+        registry=registry,
+        checkpointer=checkpointer,
+        contracts_root=repo_contracts_root,
+    )
+    assert isinstance(resumed, WorkflowRunCompleted)
+    summary = resumed.output.get("summary") if isinstance(resumed.output, dict) else None
+    assert isinstance(summary, dict)
+    assert summary["completed"] == 2
 
 
 class _FlakyExecutor:

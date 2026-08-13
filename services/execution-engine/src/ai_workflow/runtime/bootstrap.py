@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import asyncpg
-import httpx
 
 from ai_workflow.config.settings import Settings
 from ai_workflow.nodes.action.http_request import HttpRequestNodeExecutor
@@ -35,7 +34,7 @@ from ai_workflow.security.credentials import (
     StaticCredentialResolver,
     build_credential_resolver,
 )
-from ai_workflow.security.http_client import SafeHttpClient
+from ai_workflow.security.http_client import SafeHttpClient, create_async_client
 from ai_workflow.tasks.research import (
     CleanupExecuteTaskExecutor,
     CleanupPlanTaskExecutor,
@@ -79,7 +78,7 @@ def build_runner_registry(
     if resolver is None:
         resolver = StaticCredentialResolver({})
 
-    http_client = safe_http_client or SafeHttpClient(httpx.AsyncClient())
+    http_client = safe_http_client or SafeHttpClient(create_async_client())
 
     if embedding_provider is not None:
         embedder = embedding_provider

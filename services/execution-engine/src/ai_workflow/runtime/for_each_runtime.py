@@ -4,6 +4,7 @@ import asyncio
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -266,15 +267,6 @@ def _body_sink_nodes(
     return [node_id for node_id in body_node_ids if node_id not in has_outgoing]
 
 
-async def _sleep_backoff(backoff_ms: int, *, jitter: bool) -> None:
-    delay = max(0.0, backoff_ms / 1000.0)
-    if jitter and delay > 0:
-        frac = asyncio.get_event_loop().time() % 1.0
-        delay = delay * (0.5 + 0.5 * frac)
-    if delay > 0:
-        await asyncio.sleep(delay)
-
-
 async def _execute_item_body(
     *,
     workflow: WorkflowDefinition,
@@ -287,6 +279,7 @@ async def _execute_item_body(
     project_id: UUID,
     credential_resolver: object | None,
     cancel_check: Callable[[], bool] | None = None,
+    deadline: datetime | None = None,
 ) -> JsonValue:
     item_key = str(envelope["item_key"])
     item_outputs: dict[str, dict[str, JsonValue]] = {}
@@ -328,6 +321,7 @@ async def _execute_item_body(
                 workflow_version_id=workflow.workflow_version_id,
                 node_id=_node.id,
                 attempt=attempt,
+                deadline=deadline,
                 idempotency_key=f"{run_id}:{_node.id}:{item_key}",
                 runtime=_runtime,
                 input_schema=workflow.input_schema,
@@ -348,7 +342,6 @@ async def _execute_item_body(
             multiplier=retry_policy.multiplier,
             max_backoff_ms=retry_policy.max_backoff_ms,
             jitter=retry_policy.jitter,
-            sleep_backoff=_sleep_backoff,
         )
         item_outputs[body_node_id] = dict(result.outputs)
 
@@ -380,6 +373,7 @@ async def run_foreach_frame(
     credential_resolver: object | None,
     cancel_check: asyncio.Event | None = None,
     on_item_complete: Callable[[ForEachFrame], Awaitable[None]] | None = None,
+    deadline: datetime | None = None,
 ) -> ForEachFrame:
     """Execute pending items in a for-each frame with bounded concurrency.
 
@@ -444,6 +438,7 @@ async def run_foreach_frame(
                             if cancel_check is not None
                             else None
                         ),
+                        deadline=deadline,
                     ),
                     timeout=frame.item_timeout_seconds,
                 )
