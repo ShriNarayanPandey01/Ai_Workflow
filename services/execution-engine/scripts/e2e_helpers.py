@@ -9,7 +9,7 @@ import os
 import socket
 import sys
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,7 @@ from uvicorn import Config, Server
 
 from ai_workflow.config.settings import SERVICE_ROOT, Settings, load_settings
 from ai_workflow.messaging import constants as mq
+from ai_workflow.messaging.consumer import connect_rabbitmq
 from ai_workflow.messaging.topology import declare_durable_queue, declare_topology
 from ai_workflow.runtime.action_keys import PostgresActionKeyStore
 from ai_workflow.runtime.bootstrap import build_runner_registry
@@ -36,7 +37,7 @@ from ai_workflow.security.credentials import build_credential_resolver
 from ai_workflow.security.http_client import SafeHttpClient
 from ai_workflow.security.ssrf import fake_resolver
 from ai_workflow.tasks.checkpoints import PostgresTaskCheckpointStore
-from ai_workflow.worker.execution_worker import _connect_rabbitmq, _handle_message
+from ai_workflow.worker.execution_worker import _handle_message
 from ai_workflow.worker.handler import ExecutionCommandHandler, build_execution_handler
 from ai_workflow.worker.task_worker import _handle_task_command
 
@@ -161,8 +162,10 @@ def build_start_envelope(
     workflow: dict[str, Any],
     *,
     run_input: dict[str, Any],
+    run_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> tuple[dict[str, Any], str]:
-    run_id = str(uuid4())
+    resolved_run_id = run_id or str(uuid4())
     envelope: dict[str, Any] = {
         "message_id": str(uuid4()),
         "message_type": "execution.start",
@@ -170,7 +173,7 @@ def build_start_envelope(
         "occurred_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "correlation_id": str(uuid4()),
         "causation_id": None,
-        "idempotency_key": f"start:{run_id}",
+        "idempotency_key": idempotency_key or f"start:{resolved_run_id}",
         "tenant": {
             "workspace_id": "55555555-5555-4555-8555-555555555501",
             "project_id": "66666666-6666-4666-8666-666666666601",
@@ -178,7 +181,7 @@ def build_start_envelope(
         "subject": {
             "workflow_id": workflow["workflow_id"],
             "workflow_version_id": workflow["workflow_version_id"],
-            "run_id": run_id,
+            "run_id": resolved_run_id,
         },
         "sequence": None,
         "payload": {
@@ -189,7 +192,7 @@ def build_start_envelope(
             "definition": deepcopy(workflow),
         },
     }
-    return envelope, run_id
+    return envelope, resolved_run_id
 
 
 def mint_resume_envelope(
@@ -538,6 +541,21 @@ async def prompt_human_review_value(default_value: dict[str, Any]) -> dict[str, 
         return {"value": parsed}
 
 
+async def prompt_review_correctness() -> bool:
+    """Ask whether generated chat output is correct (True) or should be regenerated."""
+    print("=== HUMAN REVIEW: is the generated output correct? ===")
+    print("Type 'correct' to accept, or 'incorrect' to regenerate from the same prompt:")
+    loop = asyncio.get_running_loop()
+    while True:
+        line = await loop.run_in_executor(None, sys.stdin.readline)
+        choice = (line or "").strip().lower()
+        if choice in {"correct", "yes", "y", "ok", "approve", "approved"}:
+            return True
+        if choice in {"incorrect", "no", "n", "reject", "rejected", "regenerate"}:
+            return False
+        print("Please type correct or incorrect:")
+
+
 def node_completed_ids(events: list[dict]) -> set[str]:
     return {
         str((event.get("payload") or {}).get("node_id"))
@@ -546,8 +564,37 @@ def node_completed_ids(events: list[dict]) -> set[str]:
     }
 
 
+def node_completed_count(events: list[dict], node_id: str) -> int:
+    return sum(
+        1
+        for event in events
+        if event.get("message_type") == "node.completed"
+        and str((event.get("payload") or {}).get("node_id")) == node_id
+    )
+
+
 def chat_response_from_events(events: list[dict], *, chat_node_id: str) -> dict[str, Any] | None:
     for event in events:
+        if event.get("message_type") != "node.completed":
+            continue
+        payload = event.get("payload") or {}
+        if payload.get("node_id") != chat_node_id:
+            continue
+        outputs = payload.get("outputs") or {}
+        response = outputs.get("response")
+        if isinstance(response, dict):
+            text = response.get("text")
+            if isinstance(text, str) and text:
+                return response
+    return None
+
+
+def latest_chat_response_from_events(
+    events: list[dict],
+    *,
+    chat_node_id: str,
+) -> dict[str, Any] | None:
+    for event in reversed(events):
         if event.get("message_type") != "node.completed":
             continue
         payload = event.get("payload") or {}
@@ -615,6 +662,50 @@ def build_live_http_registry(
         max_loop_iterations=settings.max_loop_iterations,
         max_fan_out_items=settings.max_fan_out_items,
     )
+
+
+class CrashOnceExecutor:
+    """Delegate wrapper that fails once for a specific node id, then succeeds."""
+
+    def __init__(
+        self,
+        delegate: object,
+        *,
+        crash_node_id: str,
+        state: dict[str, int],
+    ) -> None:
+        self.node_type = getattr(delegate, "node_type", "")
+        self._delegate = delegate
+        self._crash_node_id = crash_node_id
+        self._state = state
+
+    async def execute(self, context: object, config: object, inputs: object) -> object:
+        node_id = str(getattr(context, "node_id", ""))
+        if node_id == self._crash_node_id and self._state["crashes"] == 0:
+            self._state["crashes"] += 1
+            raise RuntimeError("simulated worker crash after checkpoint")
+        return await self._delegate.execute(context, config, inputs)  # type: ignore[attr-defined]
+
+
+def install_crash_once_node(
+    registry: object,
+    *,
+    node_type: str,
+    crash_node_id: str,
+) -> dict[str, int]:
+    """Replace ``node_type`` so the named node fails once, then delegates."""
+    original = registry.get_node(node_type)  # type: ignore[attr-defined]
+    delegate = original.executor_factory()
+    state = {"crashes": 0}
+    registry._nodes[node_type] = replace(  # noqa: SLF001 - e2e crash-injection seam
+        original,
+        executor_factory=lambda: CrashOnceExecutor(
+            delegate,
+            crash_node_id=crash_node_id,
+            state=state,
+        ),
+    )
+    return state
 
 
 @dataclass
@@ -689,7 +780,9 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
         max_size=max(settings.worker_prefetch + 4, 10),
     )
 
-    connection = await _connect_rabbitmq(settings.rabbitmq_url, attempts=15, delay_seconds=1.0)
+    connection = await connect_rabbitmq(
+        settings.rabbitmq_url, attempts=15, delay_seconds=1.0, role="execution-worker"
+    )
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=settings.worker_prefetch)
     await declare_topology(channel)
