@@ -1,6 +1,5 @@
 package com.example.aiworkflow.task.api;
 
-import com.example.aiworkflow.common.pagination.CursorPage;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.Instant;

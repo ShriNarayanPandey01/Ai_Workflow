@@ -170,9 +170,34 @@ public class CredentialService {
             CredentialEntity credential = credentials
                     .findByIdAndProjectId(credentialId, run.getProjectId())
                     .orElseThrow(() -> new ProblemException(HttpStatus.NOT_FOUND, "CREDENTIAL_NOT_FOUND", "Credential not found"));
-            secrets.set(slot, decryptData(credential));
+            secrets.set(slot, extractSlotSecret(decryptData(credential)));
         }
         return new ResolveResponse(runId, request.nodeId(), secrets);
+    }
+
+    private JsonNode extractSlotSecret(JsonNode data) {
+        if (data == null || data.isNull()) {
+            return objectMapper.getNodeFactory().textNode("");
+        }
+        if (data.isTextual()) {
+            return data;
+        }
+        if (data.isObject()) {
+            for (String key : List.of("api_key", "apiKey", "token", "secret", "value", "password", "key")) {
+                JsonNode field = data.get(key);
+                if (field != null && field.isTextual() && !field.asText().isBlank()) {
+                    return field;
+                }
+            }
+            if (data.size() == 1) {
+                JsonNode single = data.elements().next();
+                if (single != null && single.isTextual()) {
+                    return single;
+                }
+            }
+            return objectMapper.getNodeFactory().textNode(data.toString());
+        }
+        return objectMapper.getNodeFactory().textNode(data.asText());
     }
 
     private void seal(CredentialEntity entity, JsonNode data) {

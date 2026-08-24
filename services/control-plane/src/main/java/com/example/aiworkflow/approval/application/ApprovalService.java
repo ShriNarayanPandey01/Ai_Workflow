@@ -91,6 +91,9 @@ public class ApprovalService {
         if (!"WAITING".equals(run.getStatus()) || !"HUMAN".equals(run.getWaitingReason())) {
             throw new ProblemException(HttpStatus.CONFLICT, "RUN_NOT_WAITING_HUMAN", "Run is not waiting for a human decision");
         }
+        if (request == null || request.decision() == null || request.decision().isBlank()) {
+            throw new ProblemException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "decision is required");
+        }
         String decision = request.decision().trim().toUpperCase();
         if (!decision.equals("APPROVE") && !decision.equals("REJECT") && !decision.equals("EDIT")) {
             throw new ProblemException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "decision must be APPROVE, REJECT, or EDIT");

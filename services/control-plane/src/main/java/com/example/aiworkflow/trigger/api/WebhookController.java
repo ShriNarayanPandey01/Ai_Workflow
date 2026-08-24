@@ -23,8 +23,11 @@ public class WebhookController {
     @PostMapping("/hooks/v1/{publicId}/{secret}")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public Map<String, UUID> handle(
-            @PathVariable UUID publicId, @PathVariable String secret, @RequestBody(required = false) JsonNode body) {
-        UUID runId = triggers.handleWebhook(publicId, secret, body);
+            @PathVariable UUID publicId,
+            @PathVariable String secret,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody(required = false) JsonNode body) {
+        UUID runId = triggers.handleWebhook(publicId, secret, body, idempotencyKey);
         return Map.of("runId", runId);
     }
 }

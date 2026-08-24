@@ -32,5 +32,14 @@ public final class CredentialDtos {
 
     public record ResolveRequest(UUID nodeId, List<String> slots, UUID workflowVersionId) {}
 
-    public record ResolveResponse(UUID runId, UUID nodeId, JsonNode secrets) {}
+    public record ResolveResponse(
+            UUID runId,
+            UUID nodeId,
+            @com.fasterxml.jackson.annotation.JsonProperty("credentials") JsonNode credentials) {
+
+        @com.fasterxml.jackson.annotation.JsonProperty("secrets")
+        public JsonNode secrets() {
+            return credentials;
+        }
+    }
 }

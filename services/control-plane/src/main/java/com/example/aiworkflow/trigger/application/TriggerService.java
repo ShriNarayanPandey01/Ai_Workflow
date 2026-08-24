@@ -93,7 +93,10 @@ public class TriggerService {
     @Transactional
     public TriggerResponse create(UUID userId, UUID projectId, UUID workflowId, CreateTriggerRequest request) {
         ProjectEntity project = projects.requireMember(userId, projectId);
-        WorkflowEntity workflow = drafts.requireWorkflow(userId, projectId, workflowId);
+        drafts.requireWorkflow(userId, projectId, workflowId);
+        if (request.type() == null || request.type().isBlank()) {
+            throw new ProblemException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Trigger type is required");
+        }
         String type = request.type().trim().toLowerCase();
         if (!type.equals("webhook") && !type.equals("schedule") && !type.equals("manual")) {
             throw new ProblemException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Unsupported trigger type");
@@ -170,7 +173,7 @@ public class TriggerService {
     }
 
     @Transactional
-    public UUID handleWebhook(UUID publicId, String secret, JsonNode input) {
+    public UUID handleWebhook(UUID publicId, String secret, JsonNode input, String idempotencyKey) {
         TriggerEntity entity = triggers
                 .findByPublicId(publicId)
                 .orElseThrow(() -> opaque());
@@ -180,8 +183,16 @@ public class TriggerService {
         if (secret == null || !passwordEncoder.matches(secret, entity.getSecretHash())) {
             throw opaque();
         }
+        String key = (idempotencyKey != null && !idempotencyKey.isBlank())
+                ? "webhook:" + entity.getId() + ":" + idempotencyKey.trim()
+                : "webhook:" + entity.getId() + ":" + UUID.randomUUID();
         return dispatchInternal(
-                entity, input == null ? objectMapper.createObjectNode() : input, "webhook:" + entity.getId() + ":" + UUID.randomUUID());
+                entity, input == null ? objectMapper.createObjectNode() : input, key);
+    }
+
+    @Transactional
+    public UUID handleWebhook(UUID publicId, String secret, JsonNode input) {
+        return handleWebhook(publicId, secret, input, null);
     }
 
     @Transactional

@@ -21,8 +21,19 @@ public class DocumentProjector {
     public void apply(JsonNode envelope) {
         String type = envelope.path("message_type").asText();
         JsonNode payload = envelope.path("payload");
-        UUID documentId = UUID.fromString(payload.path("document_id").asText(
-                envelope.path("subject").path("document_id").asText()));
+        String rawDocId = payload.path("document_id").asText();
+        if (rawDocId.isBlank()) {
+            rawDocId = envelope.path("subject").path("document_id").asText();
+        }
+        if (rawDocId.isBlank()) {
+            return;
+        }
+        UUID documentId;
+        try {
+            documentId = UUID.fromString(rawDocId);
+        } catch (IllegalArgumentException ex) {
+            return;
+        }
         DocumentEntity document = documents.findById(documentId).orElse(null);
         if (document == null) {
             return;

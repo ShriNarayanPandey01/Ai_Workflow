@@ -90,9 +90,12 @@ public class TaskService {
     public CursorPage<TaskItemView> listItems(UUID userId, UUID projectId, UUID taskId, String cursor, int limit) {
         requireTask(userId, projectId, taskId);
         Cursors.Key key = cursor == null ? null : Cursors.decode(cursor);
-        List<TaskItemEntity> rows =
-                items.listPage(taskId, key == null ? null : key.createdAt(), key == null ? null : key.id());
         int capped = Math.min(Math.max(limit, 1), 100);
+        List<TaskItemEntity> rows = items.listPage(
+                taskId,
+                key == null ? null : key.createdAt(),
+                key == null ? null : key.id(),
+                org.springframework.data.domain.PageRequest.of(0, capped + 1));
         List<TaskItemEntity> page = rows.size() > capped ? rows.subList(0, capped) : rows;
         String next = rows.size() > capped
                 ? Cursors.encode(page.getLast().getCreatedAt(), page.getLast().getId())

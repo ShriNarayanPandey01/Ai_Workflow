@@ -16,7 +16,10 @@ def normalize_database_url(database_url: str) -> str:
 
 
 async def _init_connection(conn: asyncpg.Connection) -> None:
-    await register_vector(conn)
+    try:
+        await register_vector(conn)
+    except Exception:
+        return
 
 
 async def create_pool(database_url: str, *, min_size: int = 1, max_size: int = 10) -> asyncpg.Pool:

@@ -30,5 +30,6 @@ public interface WorkflowRepository extends JpaRepository<WorkflowEntity, UUID> 
     List<WorkflowEntity> listPage(
             @Param("projectId") UUID projectId,
             @Param("cursorCreatedAt") Instant cursorCreatedAt,
-            @Param("cursorId") UUID cursorId);
+            @Param("cursorId") UUID cursorId,
+            org.springframework.data.domain.Pageable pageable);
 }

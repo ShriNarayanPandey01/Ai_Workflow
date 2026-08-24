@@ -2,7 +2,7 @@
 FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /workspace
 COPY services/control-plane /workspace
-RUN chmod +x mvnw && ./mvnw -q -DskipTests package
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw -q -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S aiw && adduser -S aiw -G aiw

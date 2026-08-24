@@ -132,7 +132,11 @@ public class ExecutionProjector {
             case "execution.queued" -> transition(run, "QUEUED");
             case "execution.started" -> {
                 transition(run, "RUNNING");
-                run.setStartedAt(now);
+                if (run.getStartedAt() == null) {
+                    run.setStartedAt(now);
+                }
+                run.setWaitingReason(null);
+                run.setInterruptId(null);
             }
             case "execution.waiting" -> {
                 transition(run, "WAITING");
@@ -157,10 +161,14 @@ public class ExecutionProjector {
                 transition(run, status);
                 run.setErrorCode(payload.path("error").path("code").asText(null));
                 run.setFinishedAt(now);
+                run.setWaitingReason(null);
+                run.setInterruptId(null);
             }
             case "execution.cancelled" -> {
                 transition(run, "CANCELLED");
                 run.setFinishedAt(now);
+                run.setWaitingReason(null);
+                run.setInterruptId(null);
             }
             case "node.started", "node.completed", "node.failed" -> upsertNode(run.getId(), envelope, payload, now);
             default -> log.debug("ignored event type {}", type);

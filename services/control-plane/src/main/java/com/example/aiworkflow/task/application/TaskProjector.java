@@ -39,7 +39,19 @@ public class TaskProjector {
         String type = envelope.path("message_type").asText();
         JsonNode payload = envelope.path("payload");
         JsonNode subject = envelope.path("subject");
-        UUID taskId = UUID.fromString(payload.path("task_id").asText(subject.path("task_id").asText()));
+        String rawTaskId = payload.path("task_id").asText();
+        if (rawTaskId.isBlank()) {
+            rawTaskId = subject.path("task_id").asText();
+        }
+        if (rawTaskId.isBlank()) {
+            return;
+        }
+        UUID taskId;
+        try {
+            taskId = UUID.fromString(rawTaskId);
+        } catch (IllegalArgumentException ex) {
+            return;
+        }
         Instant now = clock.instant();
         switch (type) {
             case "task.progress" -> applyProgress(envelope, payload, taskId, now);

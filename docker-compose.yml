@@ -95,6 +95,8 @@ services:
       AIW_ZENMUSK_IMAGE_BASE_URL: ${AIW_ZENMUSK_IMAGE_BASE_URL:-https://zenmux.ai/api/vertex-ai}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AIW_ANTHROPIC_MODEL: ${AIW_ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      AIW_CONTROL_PLANE_INTERNAL_URL: ${AIW_CONTROL_PLANE_INTERNAL_URL:-http://control-plane:8080}
+      AIW_INTERNAL_AUTH_TOKEN: ${AIW_INTERNAL_AUTH_TOKEN:-development-only-jwt-secret-must-be-at-least-32-bytes}
       AIW_ARTIFACT_DIR: /app/artifacts
     volumes:
       - ./services/execution-engine/src:/app/src:ro
@@ -137,6 +139,11 @@ services:
       AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
       AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
       AIW_SERVICE_ROLE: execution-api
+      AIW_CONTRACTS_ROOT: /contracts
+    volumes:
+      - ./services/execution-engine/src:/app/src:ro
+      - ./services/execution-engine/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
     ports:
       - "8088:8080"
     depends_on:
@@ -178,6 +185,11 @@ services:
       AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
       AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
       AIW_SERVICE_ROLE: rag-api
+      AIW_CONTRACTS_ROOT: /contracts
+    volumes:
+      - ./services/rag/src:/app/src:ro
+      - ./services/rag/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
     ports:
       - "8089:8080"
     depends_on:
@@ -198,16 +210,30 @@ services:
       - "9001:9001"
     volumes:
       - aiw-minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   minio-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         until mc alias set local http://minio:9000 aiw aiwsecret; do sleep 1; done
         mc mb -p local/aiw || true
+
+  web:
+    build:
+      context: ./apps/web
+    ports:
+      - "5173:80"
+    depends_on:
+      - control-plane
 
 volumes:
   aiw-postgres:
