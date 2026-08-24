@@ -1,671 +1,437 @@
-# AI Workflow Platform: High-Level Design
+# AI Workflow Platform — High-Level Design (HLD)
 
 ## 1. Document Control
 
 | Field | Value |
 | --- | --- |
-| Document | High-Level Design (HLD) |
-| System | AI Workflow Platform |
-| Status | Initial implementation baseline |
-| Primary audience | Product engineering, architecture, security, operations, and QA |
-| Related documents | `design/plan.md`, `design/LLD.md` |
+| **Document** | High-Level Design (HLD) |
+| **System** | AI Workflow Platform |
+| **Status** | Authoritative System Architecture Baseline |
+| **Audience** | Full-stack, Java, Python, DevOps, and Security Engineers |
+| **Contracts** | [`contracts/**`](../contracts/) (Canonical Wire Schemas) |
+| **Service LLDs** | [`control-plane/LLD.md`](./control-plane/LLD.md), [`execution-engine/LLD.md`](./execution-engine/LLD.md), [`rag/README.md`](./rag/README.md) |
 
-This document defines the system boundaries, major components, data ownership, integration patterns, trust boundaries, quality attributes, and deployment model. Detailed classes, APIs, tables, message shapes, and algorithms are defined in the LLD.
+---
 
-## 2. Executive Summary
+## 2. Executive Summary & Goals
 
-The platform lets authenticated users visually compose AI workflows from versioned nodes, publish immutable workflow versions, execute them from manual/webhook/scheduled triggers, inspect live and historical runs, use project-scoped retrieval-augmented generation (RAG), and pause execution for human approval.
+The **AI Workflow Platform** enables authenticated users to visually compose, validate, publish, trigger, monitor, pause, and resume complex AI workflows. It combines deterministic control flow (conditions, bounded loops, fan-out/fan-in) with AI-driven operations (LLM chat, project-scoped RAG, durable heavy tasks, and human approval interrupts).
 
-The architecture separates platform governance from AI execution:
-
-- A **React web application** provides the operational user experience.
-- A **Spring Boot control plane** is the sole public backend and authoritative owner of identity, authorization, workflow lifecycle, credentials, triggers, and run read models.
-- A **Python execution plane** compiles neutral workflow definitions into a durable walker and executes AI, RAG, control, human, and action nodes.
-- **RabbitMQ** decouples commands and events with at-least-once delivery.
-- **PostgreSQL** provides platform records, durable execution checkpoints, and pgvector search in separately owned schemas.
-- **MinIO** stores uploaded source documents.
-
-The persisted workflow format is independent of the walker internals. Product contracts stay in `contracts/`; the execution-engine runner is an internal implementation.
-
-## 3. Goals and Non-Goals
-
-### 3.1 Goals
-
-- Provide a visual, extensible node-based workflow authoring experience.
-- Support deterministic control flow and AI-driven processing in the same workflow.
-- Support typed connections, structured conditions, fan-out/fan-in, and controlled loops.
-- Preserve auditability through immutable published workflow versions.
-- Execute asynchronously with retries, timeouts, cancellation, idempotency, and restart recovery.
-- Protect user, project, credential, and document boundaries.
-- Support OpenAI-compatible chat and embedding providers.
-- Support human approval and review through durable execution interrupts.
-- Make new node types incremental through manifests and executor registries.
-- Support bounded collection processing and independently scalable, durable heavy-task jobs.
-- Support explainable stock-watchlist momentum screening, cited research, and approval-gated cleanup through typed provider adapters.
-- Run locally and in an initial hosted environment through Docker Compose.
-
-### 3.2 Non-Goals for the MVP
-
-- Arbitrary user-provided code execution.
-- Loading untrusted binary or Python plug-ins at runtime.
-- Public node marketplace.
-- Simultaneous collaborative editing.
-- Billing and entitlement management.
-- Enterprise federation through OIDC or SAML.
-- Kubernetes-native autoscaling and multi-region failover.
-- Exactly-once message delivery. The system provides effectively-once outcomes through idempotency.
-- Automated brokerage trading or personalized investment advice.
-- Unrestricted cleanup of host files, arbitrary databases, or cloud accounts.
-
-## 4. Architectural Principles
-
-1. **Single public backend:** browsers communicate only with the Spring control plane.
-2. **Explicit ownership:** each service writes only its owned database schema.
-3. **Contract-first integration:** JSON Schema is canonical for workflows, nodes, commands, and events.
-4. **Immutable execution input:** production triggers pin a published workflow version.
-5. **At-least-once safe:** command and event handlers are idempotent.
-6. **No arbitrary expressions:** conditions use a validated abstract syntax tree.
-7. **No arbitrary cycles:** loops are explicit, bounded, and budgeted.
-8. **Secrets by reference:** persisted graphs and messages contain credential IDs, never secret values.
-9. **Defense in depth:** graph validation runs in both Java and Python before execution.
-10. **Extensibility at registries:** new nodes add manifests and executors rather than core branching logic.
-11. **Operational transparency:** every run and node transition is observable and correlated.
-12. **Heavy work is durable:** long tasks become checkpointed jobs with progress, budgets, artifacts, and cancellation.
-13. **Destructive work is planned first:** cleanup requires typed scope, dry run, approval, and per-item audit.
-
-## 5. System Context
-
-```mermaid
-flowchart LR
-    User[Workflow Author or Operator]
-    Admin[Platform Administrator]
-    Provider[OpenAI-Compatible Provider]
-    MarketData[Market Data Provider]
-    ResearchSources[Research and Search Providers]
-    External[External HTTP Services]
-    Browser[React Web Application]
-    Platform[AI Workflow Platform]
-
-    User --> Browser
-    Admin --> Browser
-    Browser -->|HTTPS| Platform
-    Platform -->|HTTPS with scoped credential| Provider
-    Platform -->|Licensed/configured API| MarketData
-    Platform -->|Search and source retrieval| ResearchSources
-    Platform -->|Policy-controlled HTTPS| External
+```
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │                           React Web Browser                            │
+ └───────────────────────────────────┬────────────────────────────────────┘
+                                     │ HTTPS REST / SSE (/api/v1)
+                                     ▼
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │               Spring Boot Control Plane (Port 8080)                    │
+ │    Identity, Drafts, Immutable Versions, Quartz, Outbox, Approvals     │
+ └───────┬───────────────────────────┬────────────────────────────┬───────┘
+         │                           │                            │
+         ▼                           ▼                            ▼
+ ┌───────────────┐           ┌───────────────┐            ┌───────────────┐
+ │ PostgreSQL    │           │ RabbitMQ      │            │ MinIO Storage │
+ │ public schema │           │ Exchanges     │            │ Source Docs   │
+ └───────────────┘           └───────┬───────┘            └───────────────┘
+                                     │
+         ┌───────────────────────────┼────────────────────────────┐
+         │ aiw.execution.commands    │ aiw.task.commands          │ aiw.ingestion.commands
+         ▼                           ▼                            ▼
+ ┌───────────────┐           ┌───────────────┐            ┌───────────────┐
+ │ Execution     │           │ Task Worker   │            │ RAG Worker    │
+ │ Worker (Py)   │           │ (Heavy Jobs)  │            │ (Ingest/Vect) │
+ └───────┬───────┘           └───────┬───────┘            └───────┬───────┘
+         │                           │                            │
+         ▼                           ▼                            ▼
+ ┌───────────────┐           ┌───────────────┐            ┌───────────────┐
+ │ ee schema     │           │ MinIO Storage │            │ rag schema    │
+ │ Checkpoints   │           │ Run Artifacts │            │ pgvector      │
+ └───────────────┘           └───────────────┘            └───────────────┘
 ```
 
-### 5.1 Actors
+### 2.1 Core Architectural Principles (7 Golden Rules)
 
-| Actor | Primary capabilities |
-| --- | --- |
-| Workflow author | Create projects and workflows, configure nodes, validate drafts, publish versions, and test runs |
-| Operator | Activate triggers, inspect runs, cancel executions, and resolve approvals |
-| Administrator | Inspect platform health and audit events; administer platform policy |
-| External caller | Invoke a published workflow through a secret webhook endpoint |
-| AI provider | Serve chat-completion and embedding requests |
-| Market-data provider | Supply timestamped price/volume history for configured watchlists |
-| Research/search provider | Return source discovery and retrievable evidence for research jobs |
-| External action service | Receive policy-compliant workflow HTTP requests |
+1. **Single Public Gateway:** Browsers communicate *exclusively* with the Spring Boot Control Plane over HTTPS (`/api/v1`, `/hooks/v1`). Python workers, databases, RabbitMQ, and MinIO are private.
+2. **Contract-First Authority:** JSON Schemas in [`contracts/`](../contracts/) are canonical. Wire formats and manifest shapes must strictly adhere to them.
+3. **Strict Schema Ownership:** Every service writes *only* to its owned database schema:
+   - `public.*` &rarr; Owned exclusively by **Control Plane** (Spring Boot / Flyway).
+   - `ee.*` &rarr; Owned exclusively by **Execution Engine** (`ee.workflow_checkpoints`, `ee.worker_inbox`, `ee.run_leases`).
+   - `rag.*` &rarr; Owned exclusively by **RAG Service** (`rag.rag_document_versions`, `rag.rag_chunks`).
+4. **Secrets by Reference:** Persisted workflow graphs and broker messages carry *credential IDs*, never secret values. Workers resolve credentials on-demand via the Control Plane against the run's frozen definition snapshot.
+5. **At-Least-Once Delivery & Idempotency:** All RabbitMQ commands and event projectors use database-backed idempotency tables and transaction outbox/inbox guarantees.
+6. **AST-Driven Control Flow:** Conditions use a validated Abstract Syntax Tree (AST); loops are explicit, bounded, and budgeted. No arbitrary code execution (`eval`/`exec`).
+7. **Dual-Validation Defense:** Graphs are validated by both the Control Plane (pre-publish / pre-run) and the Execution Plane (pre-execution).
 
-## 6. Container Architecture
+### 2.2 MVP Scope & Non-Goals
+
+| Supported MVP Capabilities | Explicit MVP Non-Goals |
+|---|---|
+| • Visual DAG canvas with React Flow<br/>• Drafts & immutable published version pinning<br/>• Manual, Webhook, and Scheduled triggers<br/>• Conditional branches & bounded loops (`maxIterations`)<br/>• Hybrid wiring (edges + field-level input bindings)<br/>• OpenAI-compatible LLM chat & embeddings<br/>• Project-scoped document RAG via pgvector<br/>• Human approval/review durable pause & resume<br/>• Hardened outbound HTTP actions with SSRF filters<br/>• Durable heavy-task jobs (screening, research, cleanup)<br/>• Live SSE run tracing and checkpoint restart recovery | • Arbitrary user code execution (`eval`, Python scripts)<br/>• Runtime loading of untrusted binary/Python plug-ins<br/>• Public node marketplace<br/>• Real-time collaborative canvas editing<br/>• Billing, meter charging, or multi-tenant SaaS orgs<br/>• Enterprise SAML / OIDC federation (Argon2 / JWT used for MVP)<br/>• Automated brokerage trading or financial execution<br/>• Unrestricted host filesystem/cloud cleanup operations |
+
+---
+
+## 3. Container & Network Architecture
 
 ```mermaid
 flowchart TB
-    subgraph PublicZone[Public access zone]
-        Proxy[Reverse Proxy]
-        Web[React Static Web]
+    subgraph public["Public Zone"]
+        Proxy["Reverse Proxy / Ingress (Port 443/80)"]
     end
 
-    subgraph ApplicationZone[Application zone]
-        Control[Spring Boot Control Plane]
-        Scheduler[Quartz Scheduler in Control Plane]
-        PythonAPI[FastAPI Internal API]
-        Worker[Python RabbitMQ Worker]
-        TaskWorker[Python Heavy Task Worker]
-        Outbox[Outbox Publisher]
+    subgraph app["Application Zone (Internal Network)"]
+        CP["control-plane (Spring Boot :8080)"]
+        EA["execution-api (FastAPI :8000 Health)"]
+        EW["execution-worker (Python Runner)"]
+        TW["task-worker (Durable Tasks)"]
+        RW["rag-worker (Document Ingestion)"]
     end
 
-    subgraph DataZone[Data zone]
-        Postgres[(PostgreSQL + pgvector)]
-        Rabbit[(RabbitMQ)]
-        MinIO[(MinIO)]
+    subgraph data["Data Zone (Isolated Network)"]
+        PG[("PostgreSQL 16 + pgvector<br/>(public, ee, rag schemas)")]
+        MQ[("RabbitMQ 3.13<br/>(aiw.commands.v1 / aiw.events.v1)")]
+        MinIO[("MinIO Object Storage<br/>(documents, artifacts)")]
     end
 
-    Proxy --> Web
-    Proxy --> Control
-    Control --> Postgres
-    Scheduler --> Postgres
-    Outbox --> Rabbit
-    Control --> Rabbit
-    Worker --> Rabbit
-    TaskWorker --> Rabbit
-    Worker --> Postgres
-    TaskWorker --> Postgres
-    PythonAPI --> Postgres
-    Control --> MinIO
-    Worker --> MinIO
-    TaskWorker --> MinIO
-    Worker -->|Scoped internal request| Control
+    Proxy --> CP
+    CP --> PG
+    CP --> MQ
+    CP --> MinIO
+    EW --> MQ
+    TW --> MQ
+    RW --> MQ
+    EW --> PG
+    TW --> PG
+    RW --> PG
+    EW --> MinIO
+    TW --> MinIO
+    RW --> MinIO
+    EW -->|credential resolve| CP
+    TW -->|credential resolve| CP
+    RW -->|download-intent| CP
+    EA --> PG
 ```
 
-### 6.1 React Web Application
+### 3.1 Service Responsibilities
 
-The web application owns presentation and transient editing state. It renders the workflow canvas from the node catalog and workflow contract, performs immediate usability validation, and delegates authoritative operations to Spring.
+| Service / Process | Tech Stack | Owns & Manages | Does NOT Own |
+|---|---|---|---|
+| **Control Plane** | Java 21 + Spring Boot | Public REST API, Identity, Workspaces/Projects, Workflow Drafts, Immutable Versions, Catalog Manifests, Credentials (encrypted), Triggers (Quartz), Outbox Publisher, SSE Run Projector, Approvals. | Graph walking, LLM calls, vector math, task execution. |
+| **Execution Worker** | Python 3.12+ (Async) | Inbox idempotency, DAG walker runtime, step checkpoints, lease mutex, node executors, task command dispatch, run outcome events. | Public HTTP, user auth, platform user tables, document ingest. |
+| **Task Worker** | Python 3.12+ (Async) | Long-running durable jobs (research, momentum screening, cleanup), per-item checkpoints, progress reporting, artifact generation. | Parent DAG orchestration, public APIs. |
+| **RAG Worker** | Python 3.12+ (Async) | Document download, parsing, chunking, OpenAI embeddings, `rag.*` vector storage, ingestion events. | Workflow graph execution, browser APIs. |
+| **Execution API** | FastAPI + Uvicorn | Liveness (`/health`) and readiness (`/ready`) probes for container orchestration. | Workflow execution over HTTP. |
 
-Key subsystems:
+---
 
-- Authentication and protected routing.
-- Project/workflow navigation.
-- React Flow builder.
-- Schema-driven node inspector.
-- Structured condition editor.
-- Dataset, credential, and trigger management.
-- Run history and SSE run inspector.
-- Approval and review interaction.
-- Batch/task progress, artifact preview/download, research citations, and cleanup-plan review.
+## 4. Cross-Service Interaction Flows
 
-### 6.2 Spring Boot Control Plane
-
-The control plane is the policy enforcement point and system of record for product state.
-
-Key subsystems:
-
-- Identity and session management.
-- Workspace/project authorization.
-- Workflow draft, validation, publication, and versioning.
-- Node catalog service.
-- Credential encryption and scoped resolution.
-- Dataset/document metadata and signed object operations.
-- Trigger lifecycle and scheduling.
-- Execution lifecycle/read model.
-- Durable task-job, task-item, and artifact metadata.
-- Transactional outbox and event inbox.
-- SSE event fan-out and replay.
-- Audit logging.
-
-### 6.3 Python Execution Plane
-
-The execution plane receives immutable execution commands and performs runtime work.
-
-Key subsystems:
-
-- Message command consumers.
-- Dedicated heavy-task consumers for batch screening, research, and cleanup.
-- Cross-contract validation.
-- Node registry and executor registry.
-- Hybrid workflow wiring: edges/ports (structure) + input bindings (field mapping); see [05-workflow-wiring.md](./05-workflow-wiring.md).
-- Neutral graph interpretation (`runtime/runner.py` walker; not a compiled StateGraph).
-- Walker execution and PostgreSQL checkpointer (`ee.workflow_checkpoints`).
-- Provider, RAG **retrieve**, human interrupt, and action adapters.
-- Event publication.
-- Cancellation and execution-budget enforcement.
-- Per-task checkpoints, progress, artifact publication, and partial-failure policy.
-
-Document ingest/delete is **not** in this plane. `rag-worker` (`services/rag`) consumes `document.ingest` / `document.delete` and owns `rag.*` vectors. Execution-engine retrieval is read-only against that schema.
-
-### 6.4 Infrastructure Components
-
-| Component | Purpose |
-| --- | --- |
-| Reverse proxy | Same-origin routing, TLS termination in hosted environments, request limits, and public endpoint isolation |
-| PostgreSQL | Platform records, Quartz state, outbox/inbox, walker checkpoints (`ee.workflow_checkpoints`), vector chunks, and metadata |
-| RabbitMQ | Durable execution, task, resume, cancellation, ingestion commands, and progress/completion events |
-| MinIO | S3-compatible document and generated-artifact storage |
-
-## 7. Major Business Flows
-
-### 7.1 Author, Validate, and Publish
+### 4.1 Workflow Publication Flow
 
 ```mermaid
 sequenceDiagram
-    actor User
-    participant Web as React Web
-    participant CP as Spring Control Plane
-    participant DB as PostgreSQL
+    autonumber
+    actor User as User / Author
+    participant Web as Web App (React)
+    participant CP as Control Plane (Spring)
+    participant DB as PostgreSQL (public)
 
-    User->>Web: Edit workflow graph
-    Web->>Web: Validate handles and local schema
-    Web->>CP: PUT draft with revision
-    CP->>CP: Authorize and validate contract
-    CP->>DB: Update draft if revision matches
-    DB-->>CP: New revision
-    CP-->>Web: Saved draft and validation result
-    User->>Web: Publish
-    Web->>CP: POST publish
-    CP->>CP: Full graph and dependency validation
-    CP->>DB: Insert immutable workflow version
-    CP-->>Web: Published version number
+    User->>Web: Click "Publish Version"
+    Web->>CP: POST /api/v1/projects/{pId}/workflows/{wId}/publish
+    CP->>CP: Pass 1-4 Semantic Validation (Cycles, Ports, Bindings, Config)
+    CP->>DB: BEGIN Transaction
+    CP->>DB: SELECT * FROM workflow_drafts WHERE workflow_id = :id FOR UPDATE
+    CP->>DB: INSERT INTO workflow_versions (workflow_id, version, definition, hash)
+    CP->>DB: INSERT INTO audit_events (action = 'WORKFLOW_PUBLISHED')
+    CP->>DB: COMMIT Transaction
+    CP-->>Web: 201 Created (Immutable WorkflowVersionResponse)
 ```
 
-Important properties:
+---
 
-- Draft writes use optimistic concurrency.
-- Publication validates node versions, ports, conditions, loops, credentials, and collections.
-- Published definitions are immutable.
-- Active triggers reference a specific published version.
-
-### 7.2 Start and Execute a Workflow
+### 4.2 Start and Execute Run Lifecycle
 
 ```mermaid
 sequenceDiagram
-    actor User
-    participant CP as Spring Control Plane
-    participant DB as PostgreSQL
+    autonumber
+    actor User as User / Trigger
+    participant Web as Web App (React)
+    participant CP as Control Plane (Spring)
+    participant DB as PostgreSQL (public)
     participant MQ as RabbitMQ
-    participant PY as Python Worker
-
-    User->>CP: Start workflow run
-    CP->>CP: Authorize and validate input
-    CP->>DB: Insert execution and outbox command
-    CP-->>User: 202 Accepted with run ID
-    CP->>MQ: Publish execution.start
-    MQ->>PY: Deliver command
-    PY->>PY: Idempotency and contract validation
-    PY->>PY: Compile and execute graph (walker)
-    PY->>PY: Node transitions and outputs
-    PY->>MQ: Publish ordered execution events
-    MQ->>CP: Deliver events
-    CP->>DB: Update run read model and append event
-    CP-->>User: SSE event stream
-```
-
-Important properties:
-
-- Creation of the run and outbox command is one database transaction.
-- RabbitMQ acknowledgement occurs only after durable processing state is established.
-- Duplicate commands and events are discarded using message IDs/idempotency keys.
-- Node side effects use a stable execution key.
-
-### 7.3 Human Approval and Resume
-
-```mermaid
-sequenceDiagram
-    participant PY as Python Worker
-    participant MQ as RabbitMQ
-    participant CP as Spring Control Plane
-    actor Reviewer
-
-    PY-->>PY: WorkflowInterrupt (HUMAN)
-    PY->>MQ: execution.waiting event
-    MQ->>CP: Waiting event and approval payload
-    CP->>CP: Persist pending approval
-    CP-->>Reviewer: SSE pending approval
-    Reviewer->>CP: Approve, reject, or edit
-    CP->>CP: Authorize and atomically resolve request
-    CP->>MQ: execution.resume command
-    MQ->>PY: Resume with same run/thread ID
-    PY->>PY: resume_workflow with decision
-    PY->>PY: Continued execution
-```
-
-Approval nodes must issue one deterministic interrupt per invocation. Non-idempotent side effects occur after the interrupt or in a separate downstream node.
-
-### 7.4 Document Ingestion and RAG
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant CP as Spring Control Plane
-    participant Obj as MinIO
-    participant MQ as RabbitMQ
-    participant PY as rag-worker
-    participant VDB as PostgreSQL pgvector
-
-    User->>CP: Request upload
-    CP-->>User: Short-lived signed upload
-    User->>Obj: Upload document
-    User->>CP: Confirm upload
-    CP->>MQ: document.ingest via outbox
-    MQ->>PY: Ingestion command
-    PY->>Obj: Authorized object read
-    PY->>PY: Extract, normalize, and chunk
-    PY->>PY: Create embeddings
-    PY->>VDB: Replace versioned chunks transactionally
-    PY->>MQ: Ingestion completion event
-    MQ->>CP: Update document status
-```
-
-Retrieval always includes workspace, project, dataset, and active-document filters. A workflow cannot retrieve from a collection not authorized at publication and run time.
-
-### 7.5 Durable Batch and Heavy-Task Execution
-
-```mermaid
-sequenceDiagram
-    participant Runner as Parent workflow run
     participant EW as Execution Worker
-    participant MQ as RabbitMQ Task Queue
-    participant TW as Heavy Task Worker
-    participant Obj as Artifact Store
-    participant CP as Spring Control Plane
+    participant EEDB as PostgreSQL (ee)
 
-    Runner-->>EW: Heavy node reached with bounded input
-    EW->>MQ: task.start with job ID and budgets
-    EW->>EW: Checkpoint parent run as WAITING/TASK
-    MQ->>TW: Deliver task job
-    loop Bounded batches
-        TW->>TW: Process item and save checkpoint
-        TW->>MQ: task.progress/item event
-        MQ->>CP: Update task read model and SSE
+    User->>Web: Trigger Run (Manual / Webhook / Schedule)
+    Web->>CP: POST /api/v1/projects/{pId}/workflows/{wId}/executions
+    CP->>DB: BEGIN TX: Insert execution (QUEUED) + outbox row
+    CP->>DB: COMMIT TX
+    CP-->>Web: 202 Accepted (ExecutionResponse, status = QUEUED)
+    
+    Note over CP,MQ: Outbox Poller claims outbox row via SKIP LOCKED
+    CP->>MQ: Publish 'execution.start.v1' to aiw.commands.v1
+    
+    MQ->>EW: Deliver 'execution.start.v1'
+    EW->>EEDB: Claim message in ee.worker_inbox (status = processing)
+    EW->>EEDB: Acquire run lease in ee.run_leases
+    EW->>MQ: Publish 'execution.started.v1' to aiw.events.v1
+    
+    loop For each Node in DAG
+        EW->>EW: Resolve Input Bindings + Evaluate Node Executor
+        EW->>EEDB: Save checkpoint in ee.workflow_checkpoints (thread_id = run_id)
+        EW->>MQ: Publish 'node.completed.v1' to aiw.events.v1
     end
-    TW->>Obj: Store report/result artifact
-    TW->>MQ: task.completed with artifact reference
-    MQ->>EW: Deliver task completion
-    EW->>Runner: Resume same run/thread with typed result
+
+    EW->>MQ: Publish 'execution.completed.v1' to aiw.events.v1
+    EW->>EEDB: Release lease + Mark inbox completed
+    
+    MQ->>CP: Deliver events to aiw.control.events.v1
+    CP->>DB: Update executions / node_executions read models
+    CP->>Web: Push live updates via SSE stream
 ```
 
-Important properties:
+---
 
-- `For Each` bounds collection size and parallelism; it never creates unlimited fan-out.
-- Heavy jobs have elapsed-time, provider-call, token, cost, retry, item, and artifact-size budgets.
-- Item checkpoints make completed work restart-safe and prevent repeated side effects.
-- Large results are project-scoped artifacts, not oversized RabbitMQ or SSE payloads.
-- Parent runs use `WAITING` reason `TASK`, distinct from `HUMAN`, so only task completion can resume them.
-
-### 7.6 Stock Momentum Screening
-
-The workflow accepts a user-owned watchlist or bounded symbol list, obtains adjusted OHLCV data through a configured provider, validates freshness/coverage, and calculates a deterministic versioned score. A typical formula may combine multi-period returns, relative strength, volume trend, and a volatility penalty, but every factor and weight is user-visible and recorded with the result.
-
-Outputs include rank, factor values, final score, missing-data warnings, provider, currency/exchange metadata, formula version, and `asOf` timestamp. LLMs may summarize results but do not calculate the authoritative ranking. The MVP does not place orders and must display that screening output is informational, not personalized financial advice.
-
-### 7.7 Research and Cleanup Tasks
-
-Research jobs use configured search/source providers, retain retrieval timestamps and source identity, distinguish evidence from generated synthesis, and produce a report artifact with citations. Jobs stop at source, time, token, cost, or depth limits and flag claims without adequate support.
-
-Cleanup is split into two nodes. `Cleanup Plan` inventories only resources exposed by an approved connector and generates a content-addressed dry-run plan. `Cleanup Execute` accepts only that unchanged plan after authorization/approval, revalidates scope and preconditions, performs idempotent per-item actions, and records success, skip, failure, and rollback capability. There is no generic shell or host-filesystem cleanup node.
-
-## 8. Data Architecture
-
-### 8.1 Logical Data Domains
-
-| Domain | Owner | Data |
-| --- | --- | --- |
-| Identity | Spring | Users, password hashes, refresh tokens, roles |
-| Tenancy | Spring | Workspaces, memberships, projects |
-| Workflow design | Spring | Drafts, immutable versions, node references |
-| Secrets | Spring | Encrypted credentials and key metadata |
-| Triggering | Spring | Webhooks, schedules, activation state |
-| Execution read model | Spring | Runs, node runs, events, approvals, usage |
-| Runtime state | Python walker | Thread checkpoints (`ee.workflow_checkpoints`) and pending interrupts |
-| Durable tasks | Python with Spring read model | Job checkpoints, item status, budgets, progress, and task outcomes |
-| RAG index | rag-worker (`services/rag`) | Extracted chunks, embedding vectors, document-version references |
-| Documents and artifacts | Spring-mediated | Source objects and generated reports/results in MinIO |
-
-### 8.2 Consistency Model
-
-- Identity, authorization, drafts, publication, and run creation use local ACID transactions in Spring.
-- Commands are eventually published through the transactional outbox.
-- Execution and ingestion status are eventually reflected in Spring read models.
-- Event ordering is maintained per run with monotonically increasing sequence numbers.
-- UI SSE reconnect uses persisted event sequence/ID to replay missed events.
-- Duplicate delivery is expected and must not duplicate state changes or side effects.
-
-### 8.3 Retention
-
-Default retention must be configurable:
-
-- Refresh tokens: until expiry or revocation plus a short audit window.
-- Execution events: configurable operational/audit period.
-- Walker checkpoints: retained while active plus a post-terminal recovery window.
-- Node inputs/outputs: configurable with size limits and field redaction.
-- Uploaded documents and vectors: retained until dataset/document deletion completes.
-- Audit events: longer retention than ordinary operational logs.
-
-## 9. Integration Architecture
-
-### 9.1 Browser to Control Plane
-
-- JSON REST APIs under `/api/v1`.
-- Authenticated SSE for execution events.
-- Secure refresh-token cookie; access token held in browser memory.
-- Optimistic concurrency using draft revision/ETag.
-- Consistent problem-details error responses with correlation IDs.
-
-### 9.2 Control Plane to Execution Plane
-
-- Durable RabbitMQ commands for start, cancel, resume, ingest, and delete.
-- Durable RabbitMQ events for run, node, approval, and ingestion status.
-- Internal HTTPS endpoint for run-scoped credential resolution.
-- Internal health/readiness probes.
-
-### 9.3 External Providers
-
-- OpenAI-compatible HTTPS API for chat and embeddings.
-- S3-compatible API for MinIO.
-- Policy-controlled HTTP/HTTPS for action nodes.
-- All calls use explicit connect/read/total timeouts and bounded responses.
-
-## 10. Security Architecture
-
-### 10.1 Trust Boundaries
+### 4.3 Human Approval / Review Interrupt Flow
 
 ```mermaid
-flowchart LR
-    Internet[Untrusted Internet]
-    Public[Public Proxy and Web]
-    App[Trusted Application Network]
-    Data[Restricted Data Network]
-    Providers[External Providers]
+sequenceDiagram
+    autonumber
+    participant EW as Execution Worker
+    participant EEDB as PostgreSQL (ee)
+    participant MQ as RabbitMQ
+    participant CP as Control Plane (Spring)
+    participant Web as Web App (Approver)
 
-    Internet -->|TLS, rate limits, validation| Public
-    Public -->|Authenticated requests| App
-    App -->|Least-privilege identities| Data
-    App -->|Egress policy and scoped secrets| Providers
+    EW->>EW: Node 'human.approval@1' reached
+    EW->>EEDB: Save checkpoint (state = WAITING, reason = HUMAN)
+    EW->>MQ: Publish 'execution.waiting.v1' + 'approval.requested.v1'
+    
+    MQ->>CP: Project into approval_requests table
+    CP->>Web: SSE notification: Approval Pending
+    
+    Web->>CP: POST /api/v1/projects/{pId}/executions/{runId}/approvals/{appId}/decision
+    CP->>CP: Verify approver permissions
+    CP->>CP: BEGIN TX: Update approval_requests + Outbox 'execution.resume.v1'
+    CP->>CP: COMMIT TX
+    
+    CP->>MQ: Publish 'execution.resume.v1' (HUMAN decision)
+    MQ->>EW: Deliver 'execution.resume.v1'
+    EW->>EEDB: Load checkpoint from ee.workflow_checkpoints
+    EW->>EW: Inject approval output & resume DAG walking
 ```
 
-### 10.2 Controls
+---
 
-- Argon2id password hashing and refresh-token rotation/replay detection.
-- Workspace/project authorization on every resource operation.
-- AES-GCM or equivalent authenticated encryption for credentials.
-- Environment or secret-manager supplied master keys; no committed secrets.
-- Separate database users and schema grants by service.
-- Service authentication for internal endpoints.
-- Webhook secrets stored hashed where verification permits.
-- Strict request, JSON, file, and workflow validation.
-- Output encoding and safe problem responses.
-- SSRF controls for outbound actions.
-- Structured secret redaction in API responses, messages, and logs.
-- Audit events for authentication, publication, credential, trigger, run, and approval operations.
+### 4.4 Durable Heavy Task Execution Flow
 
-## 11. Reliability and Failure Handling
+```mermaid
+sequenceDiagram
+    autonumber
+    participant EW as Execution Worker
+    participant MQ as RabbitMQ
+    participant TW as Task Worker
+    participant S3 as MinIO Storage
 
-### 11.1 Delivery Guarantees
+    EW->>EW: Node with executionMode = 'durable-task' encountered
+    EW->>MQ: Publish 'task.start.v1' to aiw.task.commands.v1
+    EW->>EW: Save DAG Checkpoint (state = WAITING, reason = TASK)
+    
+    MQ->>TW: Consume 'task.start.v1'
+    loop For each item in batch
+        TW->>TW: Process item & checkpoint progress
+        TW->>MQ: Publish 'task.progress.v1' to aiw.events.v1
+    end
+    TW->>S3: Upload report / dataset artifact
+    TW->>MQ: Publish 'task.completed.v1' to aiw.task.results.v1
+    
+    MQ->>EW: Deliver 'task.completed.v1' (aiw.task.results.v1)
+    EW->>EW: In-process resume: Load checkpoint, bind task output, continue DAG
+```
 
-- RabbitMQ delivery is at least once.
-- The outbox prevents committed runs without eventually published commands.
-- Consumers persist message IDs before acknowledging delivery.
-- Event consumers use unique constraints to ignore duplicates.
-- Side-effecting nodes use stable idempotency keys derived from run, node, and attempt.
-- Heavy task items use stable job/item keys, so worker restarts skip already committed items.
+---
 
-### 11.2 Retry Strategy
+## 5. Messaging Architecture & RabbitMQ Topology
 
-- Validation and authorization errors are non-retryable.
-- Provider rate limits, transient network errors, and selected 5xx responses use bounded exponential backoff with jitter.
-- A node manifest defines whether retry is allowed and its maximum policy bounds.
-- Exhausted messages move to dead-letter queues with actionable metadata but no secrets.
-- Operators can inspect failures and create a new run; arbitrary replay into a changed workflow is not allowed.
+RabbitMQ acts as the reliable, asynchronous transport between the Control Plane and Workers.
 
-### 11.3 Recovery
+```
+ Exchanges                  Routing Keys                       Queues
+┌──────────────────┐       execution.*.v1                     ┌─────────────────────────────┐
+│                  ├─────────────────────────────────────────►│ aiw.execution.commands.v1  │
+│                  │       document.*.v1                      ├─────────────────────────────┤
+│ aiw.commands.v1  ├─────────────────────────────────────────►│ aiw.ingestion.commands.v1  │
+│ (Topic Exchange) │       task.start / task.cancel.v1        ├─────────────────────────────┤
+│                  ├─────────────────────────────────────────►│ aiw.task.commands.v1       │
+└──────────────────┘                                          └─────────────────────────────┘
 
-- Spring instances are stateless apart from PostgreSQL and RabbitMQ.
-- Python workers resume durable walker threads using run UUIDs.
-- Waiting approvals survive worker and application restarts.
-- Waiting heavy-task parents and item checkpoints survive task-worker restarts.
-- SSE clients reconnect with the last received event ID.
-- Quartz uses JDBC persistence so schedules survive restarts.
+┌──────────────────┐       task.completed / task.failed.v1    ┌─────────────────────────────┐
+│ aiw.events.v1    ├─────────────────────────────────────────►│ aiw.task.results.v1         │
+│ (Topic Exchange) │       *.v1 (all events)                  ├─────────────────────────────┤
+│                  ├─────────────────────────────────────────►│ aiw.control.events.v1       │
+└──────────────────┘                                          └─────────────────────────────┘
 
-## 12. Scalability and Performance
+┌──────────────────┐       Exhausted retries / Corrupt        ┌─────────────────────────────┐
+│ aiw.dead.v1 (DLX)├─────────────────────────────────────────►│ aiw.dead.letter.v1          │
+└──────────────────┘                                          └─────────────────────────────┘
+```
 
-### 12.1 Scaling Model
+### 5.1 Command & Event Catalog
 
-- React assets scale through the reverse proxy or CDN later.
-- Spring control-plane instances scale horizontally behind the proxy.
-- Python workers scale horizontally by RabbitMQ queue depth.
-- Ingestion and execution may use separate queues and worker pools.
-- Heavy research, market screening, and cleanup use dedicated queues/pools with per-workspace fairness and concurrency quotas.
-- PostgreSQL is the initial vertical scaling constraint and receives indexed, bounded queries.
-- MinIO can be replaced with managed S3 without changing product contracts.
+| Message Type | Exchange | Routing Key | Publisher | Consumer | Purpose |
+|---|---|---|---|---|---|
+| `execution.start` | `aiw.commands.v1` | `execution.start.v1` | Control Plane Outbox | Execution Worker | Start new run with frozen definition |
+| `execution.cancel` | `aiw.commands.v1` | `execution.cancel.v1` | Control Plane Outbox | Execution Worker | Cooperative run cancellation |
+| `execution.resume` | `aiw.commands.v1` | `execution.resume.v1` | Control Plane Outbox | Execution Worker | **HUMAN only** approval decision |
+| `document.ingest` | `aiw.commands.v1` | `document.ingest.v1` | Control Plane Outbox | RAG Worker | Ingest document & index embeddings |
+| `document.delete` | `aiw.commands.v1` | `document.delete.v1` | Control Plane Outbox | RAG Worker | Purge document chunks from `rag.*` |
+| `task.start` | `aiw.commands.v1` | `task.start.v1` | **Execution Worker** | Task Worker | Start durable heavy task |
+| `task.cancel` | `aiw.commands.v1` | `task.cancel.v1` | CP / Execution Worker | Task Worker | Cancel running heavy task |
+| `task.completed` | `aiw.events.v1` | `task.completed.v1` | Task Worker | Execution Worker | Notify parent DAG to resume |
+| `execution.*` | `aiw.events.v1` | `execution.*.v1` | Execution Worker | Control Plane | Lifecycle state (`started`, `completed`, `failed`) |
+| `node.*` | `aiw.events.v1` | `node.*.v1` | Execution Worker | Control Plane | Node-level execution tracing |
 
-### 12.2 Initial Service Objectives
+### 5.2 Ack, Retry, and Dead-Letter Rules
+1. **Never Ack Before State Write:** Consumers ack messages *only after* the local database transaction (inbox entry, checkpoint, or projection) has committed.
+2. **Idempotent Side-Effects:** Node execution side-effects use stable idempotency keys: `run_id:node_id`. Retry attempts do *not* modify the key.
+3. **DLQ Policy:** Poison pills (malformed JSON, schema mismatch, unauthorized tokens) are routed directly to `aiw.dead.v1` without infinite retries. Transient failures use exponential backoff with jitter.
 
-These are baseline engineering targets, not external guarantees:
+---
 
-| Measure | Target |
-| --- | --- |
-| Authenticated control-plane read p95 | Under 300 ms excluding large payload download |
-| Draft save p95 | Under 500 ms for supported graph size |
-| Run accepted p95 | Under 500 ms before asynchronous execution |
-| SSE propagation p95 | Under 2 seconds after event persistence |
-| Worker command start p95 | Under 5 seconds under normal queue load |
-| Availability target | 99.5% for the initial hosted environment |
-| Maximum MVP graph size | Configurable; initial default 250 nodes and 500 edges |
+## 6. Data Ownership & Database Architecture
 
-### 12.3 Resource Limits
+```
+ ┌───────────────────────────────────────────────────────────────────────────┐
+ │                           PostgreSQL 16 Engine                            │
+ ├───────────────────────────┬───────────────────────────┬───────────────────┤
+ │   public schema           │   ee schema               │   rag schema      │
+ │   (Control Plane Only)    │   (Execution Engine Only) │   (RAG Service)   │
+ ├───────────────────────────┼───────────────────────────┼───────────────────┤
+ │ • users, workspaces       │ • ee.workflow_checkpoints │ • rag_document_   │
+ │ • projects, credentials   │ • ee.worker_inbox         │   versions        │
+ │ • workflows, drafts       │ • ee.run_leases           │ • rag_chunks      │
+ │ • workflow_versions       │ • ee.action_execution_keys│   (pgvector       │
+ │ • executions, triggers    │ • ee.run_cancels          │    embeddings)    │
+ │ • approval_requests       │ • ee.workflow_definitions │                   │
+ │ • outbox_messages         │                           │                   │
+ └───────────────────────────┴───────────────────────────┴───────────────────┘
+```
 
-- Maximum workflow definition bytes.
-- Maximum graph nodes and edges.
-- Maximum condition depth and operands.
-- Maximum loop iterations and run duration.
-- Maximum input/output/event bytes.
-- Maximum uploaded file bytes and documents per dataset.
-- Maximum HTTP response bytes.
-- Per-workspace concurrency and rate limits.
-- Maximum collection fan-out, task items, task duration, provider calls, tokens, estimated cost, research sources, and artifact bytes.
+### 6.1 Schema Isolation Matrix
 
-## 13. Observability
+| Data Domain | Schema / Storage | Writer / Authority | Readers |
+|---|---|---|---|
+| **Platform Records** | `public.*` | **Control Plane** (Flyway) | Control Plane (read/write) |
+| **Durable Checkpoints** | `ee.workflow_checkpoints` | **Execution Worker** | Execution Worker (read/write) |
+| **Worker Inbox / Mutex** | `ee.worker_inbox`, `ee.run_leases` | **Execution Worker** | Execution Worker |
+| **Vector Chunks & Embeddings**| `rag.rag_chunks` | **RAG Worker** | RAG Worker (write), Execution Worker (read-only for `rag.retrieve@1`) |
+| **Source Documents** | MinIO `documents/` bucket | **Client (via signed upload)** | RAG Worker (via download intent) |
+| **Generated Artifacts** | MinIO `artifacts/` bucket | **Task / Execution Workers** | Control Plane (signed download API) |
 
-### 13.1 Logs
+### 6.2 Platform Execution State Machine
 
-- JSON logs to stdout.
-- Correlation ID on public/internal requests.
-- Run, workflow version, node, message, and attempt IDs where relevant.
-- No credential values, authorization headers, raw refresh tokens, or unredacted sensitive node data.
+```
+               ┌──────────┐
+               │  QUEUED  │
+               └────┬─────┘
+                    │
+                    ▼
+               ┌──────────┐
+        ┌─────►│ RUNNING  │◄────┐
+        │      └────┬─────┘     │
+        │           │           │
+   Resume (HUMAN/   │ Suspend   │ Resume
+   TASK complete)   ▼           │
+             ┌───────────┐      │
+             │  WAITING  ├──────┘
+             └─────┬─────┘
+                   │
+    ┌──────────────┼──────────────┬──────────────┐
+    ▼              ▼              ▼              ▼
+┌───────────┐┌───────────┐┌───────────┐┌───────────┐
+│ SUCCEEDED ││  FAILED   ││ CANCELLED ││ TIMED_OUT │
+└───────────┘└───────────┘└───────────┘└───────────┘
+```
 
-### 13.2 Metrics
+---
 
-- API request count, latency, and error rates.
-- Authentication failures and rate-limit decisions.
-- Outbox backlog and publish latency.
-- Queue depth, consumer lag, retries, and dead letters.
-- Active, waiting, failed, timed-out, and stale runs.
-- Node duration and error category by node type/version.
-- Provider latency, token use, and estimated cost.
-- Ingestion throughput and failures.
-- Heavy-task queue delay, item throughput, progress age, budget consumption, and partial-failure rate.
-- Market-data freshness/coverage, research citation coverage, and cleanup planned/executed/skipped counts.
-- Checkpoint, vector, event, and object-storage growth.
+## 7. Workflow Graph Wiring — Hybrid Model
 
-### 13.3 Tracing
+The platform uses a **hybrid model**:
+1. **Edges & Ports:** Govern DAG structure, dependencies, and execution control flow.
+2. **Input Bindings:** Govern field-level data transformation between upstream outputs and downstream inputs.
+3. **Catalog Default Bindings:** Provide zero-friction auto-wiring when standard nodes are connected.
 
-OpenTelemetry-compatible tracing should propagate correlation context across HTTP and RabbitMQ. Traces must link public requests, outbox publication, worker execution, provider calls, and event consumption without recording secrets or large payloads.
+```
+┌──────────────────────────────────────────────────────────┐
+│ 1. Catalog Port Manifests                                │
+│    Defines named typed ports (e.g. 'prompt', 'text')     │
+└────────────────────────────┬─────────────────────────────┘
+                             ▼
+┌──────────────────────────────────────────────────────────┐
+│ 2. Workflow Structural Edges                             │
+│    Declares dependency: source_node -> target_node       │
+└────────────────────────────┬─────────────────────────────┘
+                             ▼
+┌──────────────────────────────────────────────────────────┐
+│ 3. Target Node Input Bindings                            │
+│    Maps fields: target_port.path <- source_node.port.path│
+│    Origin: user | default | pass_through                 │
+└────────────────────────────┬─────────────────────────────┘
+                             ▼
+┌──────────────────────────────────────────────────────────┐
+│ 4. Execution Engine Runtime Resolver                     │
+│    Resolves JSON Pointer paths & constructs input payload│
+└──────────────────────────────────────────────────────────┘
+```
 
-## 14. Deployment Architecture
+### 7.1 Input Binding JSON Structure (On Target Node)
 
-### 14.1 Local and Initial Hosted Topology
+```json
+{
+  "id": "chat-node-uuid",
+  "type": "ai.chat-model@1",
+  "config": { "model": "gpt-4o" },
+  "input_bindings": [
+    {
+      "target_port": "prompt",
+      "target_path": "/text",
+      "source_node_id": "prompt-template-uuid",
+      "source_port": "text",
+      "source_path": "/text",
+      "origin": "default"
+    }
+  ]
+}
+```
 
-Docker Compose services:
+- **Pass-through Shorthand:** If `input_bindings` is omitted or empty, the compiler infers whole-port 1:1 pass-through (`target_path: "/"`, `source_path: "/"`).
+- **JSON Pointer Resolution:** Values are resolved using strict RFC 6901 JSON Pointers.
 
-- `proxy`
-- `web`
-- `control-plane`
-- `execution-api`
-- `execution-worker`
-- `task-worker`
-- `rag-worker`
-- `postgres`
-- `rabbitmq`
-- `minio`
-- optional one-shot migration/setup containers
+---
 
-Only the proxy exposes public ports. PostgreSQL, RabbitMQ, MinIO administrative APIs, FastAPI, and internal Spring endpoints remain on private networks.
+## 8. Security & Trust Boundaries
 
-### 14.2 Configuration
+```
+[Untrusted Internet]
+        │ HTTPS (TLS 1.3) + Rate Limiting
+        ▼
+[Reverse Proxy / Ingress]
+        │ Forward Authenticated Traffic
+        ▼
+[Spring Control Plane] (JWT Auth, RBAC, AES-256 GCM Credentials)
+        │
+        ├─► [Database] (Least privilege credentials per schema)
+        ├─► [RabbitMQ] (Authenticated AMQP channels)
+        └─► [Internal Network]
+                │
+                ▼
+        [Python Execution Plane]
+                │
+                ├─► Pre-request DNS SSRF Validation (Blocks RFC 1918 / Metadata IPs)
+                ├─► Secret Redaction Engine (Masks keys before logging/events)
+                └─► Outbound Provider APIs (OpenAI, Webhooks, External HTTPS)
+```
 
-All environment-specific configuration is externalized:
-
-- Database URLs and service users.
-- RabbitMQ URLs, exchange/queue names, and credentials.
-- MinIO endpoint, bucket, and credentials.
-- JWT signing material and token durations.
-- Credential master key and key ID.
-- Internal service-authentication material.
-- Allowed origins, public base URL, and webhook base URL.
-- Provider defaults and platform resource limits.
-- Retention and cleanup schedules.
-
-### 14.3 Health
-
-- Liveness reports process responsiveness only.
-- Readiness verifies required database and broker dependencies appropriate to the process role.
-- Worker readiness requires successful queue declaration and consumer registration.
-- Startup uses health checks and bounded retry, never fixed sleeps.
-
-## 15. Backup and Disaster Recovery
-
-- PostgreSQL base backups plus point-in-time recovery are the primary state recovery mechanism.
-- MinIO bucket versioning or scheduled object backup protects source documents.
-- RabbitMQ is transport, not long-term system of record; durable queues reduce transient loss but PostgreSQL outbox/read models remain authoritative.
-- Signing and encryption keys require secured backup and rotation procedures.
-- Restore tests must verify published workflows, credentials, pending approvals, checkpoint resume, vectors, and document objects.
-- Initial recovery objectives should be finalized before production; proposed baseline is RPO 15 minutes and RTO 4 hours.
-
-## 16. Technology Choices and Tradeoffs
-
-| Choice | Reason | Tradeoff |
-| --- | --- | --- |
-| React Flow | Mature custom node/edge editor and interaction model | Product must still own graph semantics and validation |
-| Spring Boot | Strong security, persistence, scheduling, and operational ecosystem | Adds a service boundary beside Python |
-| FastAPI + custom walker | Python AI ecosystem and durable graph/interrupt support we own | Runtime types must not leak into product contracts |
-| RabbitMQ + outbox | Reliable asynchronous work and clear backpressure | At-least-once handling adds idempotency requirements |
-| PostgreSQL + pgvector | One operational database technology for records and vectors | Very large vector workloads may later require a dedicated service |
-| MinIO | Local S3-compatible object storage | Production operations must protect a separate stateful service |
-| SSE | Simple server-to-browser run event stream with replay | Client-to-server control remains REST; not full duplex |
-| Draft + publish | Stable trigger behavior and auditability | Users manage an explicit release step |
-
-## 17. Key Risks and Mitigations
-
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Cross-language contract drift | Runtime failures | Canonical schemas, generated models, and shared fixtures in CI |
-| Duplicate side effects | External actions repeated | Stable execution keys, idempotent adapters, and persisted attempt state |
-| Unbounded workflow execution | Cost and availability incident | Explicit Loop nodes, graph limits, wall-clock budgets, cancellation, and provider limits |
-| Secret exposure | Security incident | Encryption, references, scoped resolution, and centralized redaction tests |
-| SSRF through HTTP actions | Internal network compromise | DNS/IP validation, egress policy, redirect revalidation, and private-network deny-by-default |
-| Tenant data leakage in RAG | Confidentiality incident | Mandatory ownership filters in schema, query builder, and integration tests |
-| Checkpoint growth | Database pressure | Retention, terminal-run cleanup, limits, and growth metrics |
-| Stale run read models | Confusing operations | Ordered events, replay, reconciliation jobs, and stale-run alerts |
-| Provider instability | Failed or slow workflows | Timeouts, bounded retry, circuit controls, and provider-neutral adapter |
-| Stale or incomplete market data | Misleading stock ranking | Freshness/coverage validation, adjusted-data policy, factor evidence, `asOf` timestamps, and no trade execution |
-| Unsupported research claims | Low-quality reports | Source capture, citation requirements, claim/evidence checks, and visible coverage warnings |
-| Over-broad cleanup | Destructive data loss | Typed connectors, dry-run plan hash, approval, precondition recheck, least privilege, and rollback metadata |
-| Heavy-task resource exhaustion | Queue starvation and excessive cost | Dedicated queues, quotas, hard budgets, checkpoints, cancellation, and per-workspace fairness |
-
-## 18. Evolution Path
-
-The architecture supports later additions without changing the MVP's core contracts:
-
-- Add node manifest versions and matching Java/Python adapters.
-- Split execution and ingestion into independently scaled worker pools.
-- Add provider adapters for new market datasets, research sources, and typed cleanup targets.
-- Add organization workspaces and richer roles above existing ownership IDs.
-- Add OIDC while retaining the same authorization domain.
-- Move MinIO to managed S3.
-- Move pgvector to a dedicated vector service behind the retrieval adapter.
-- Add Kubernetes deployment while preserving container and health contracts.
-- Add additional execution engines behind the neutral workflow compiler interface.
-
-## 19. HLD Acceptance Criteria
-
-- All external and internal interactions have an identified owner and trust boundary.
-- Published workflows are immutable and triggers pin versions.
-- Browser traffic cannot bypass Spring authorization.
-- Java/Python integration is contract-versioned and idempotent.
-- Arbitrary code, expressions, and cycles are excluded.
-- Credential values do not cross browser or queue boundaries.
-- Waiting workflows and schedules survive restarts.
-- RAG queries enforce workspace/project/dataset boundaries.
-- Heavy tasks are bounded, checkpointed, cancellable, and publish project-scoped artifacts.
-- Stock screens are deterministic and explainable, and cleanup cannot execute without an approved unchanged plan.
-- Deployment, observability, backup, and resource limits are defined before production release.
+1. **SSRF Guard:** All outbound HTTP requests generated by user workflows undergo DNS pre-resolution and are validated against blocked IP ranges (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.169.254`, `100.64.0.0/10`). Redirects are re-validated.
+2. **Recursive Secret Redaction:** All node execution logs, event streams, and error envelopes pass through a recursive scanner that masks authorization headers, API keys, and sensitive tokens.
+3. **No Dynamic Code Execution:** User workflows cannot run arbitrary Python/JS scripts. All compute occurs inside pre-compiled, sandboxed executor classes.

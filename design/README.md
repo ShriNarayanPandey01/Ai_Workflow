@@ -1,74 +1,49 @@
-# Design Docs — Backend Services
+# AI Workflow Platform — Architecture & Design Pack
 
-Developer-facing design pack for building the **AI Workflow Platform** backend services. Frontend/web is intentionally out of scope here.
+Welcome to the authoritative engineering documentation for the **AI Workflow Platform**.
 
-## What we are building
+This pack defines the complete system architecture, public APIs, execution runtime, data ownership boundaries, and messaging topology for all platform services.
 
-A visual AI workflow platform where authenticated users create, validate, publish, trigger, monitor, pause, and resume workflows.
+---
 
-| Layer | Technology | Role |
-| --- | --- | --- |
-| Control plane | Java 21 + Spring Boot | Sole public API, identity, workflows, credentials, triggers, run read models |
-| Execution plane | Python + FastAPI + durable walker | Interpret and run workflows, retrieve RAG, heavy tasks |
-| RAG worker | Python (`services/rag`) | Document ingest/delete and vector writes |
-| Broker | RabbitMQ | Durable commands and events (at-least-once) |
-| Database | PostgreSQL + pgvector | Platform records, checkpoints, vectors (separate schemas) |
-| Objects | MinIO | Documents and large artifacts |
+## 🗺️ System Document Map
 
-Canonical product and system docs live in **this folder**. Wire formats live under [`contracts/`](../contracts/). Use this pack for day-to-day implementation.
+```
+design/
+├── README.md                      # Index, Golden Invariants & Navigation (This file)
+├── HLD.md                         # Complete System High-Level Design
+│                                  # (Topology, Interactions, Data Ownership, Messaging, Wiring)
+├── control-plane/
+│   ├── LLD.md                     # Authoritative Control Plane LLD (Spring Boot, APIs, DDL, Security)
+│   └── FEATURES.md                # Control Plane Feature Specs & Acceptance Criteria
+├── execution-engine/
+│   ├── LLD.md                     # Authoritative Execution Engine LLD (Walker, Checkpoints, Tasks, Nodes)
+│   └── FEATURES.md                # Execution Engine Feature Specs & Acceptance Criteria
+└── rag/
+    └── README.md                  # RAG Worker, Ingestion Pipeline & pgvector Specs
+```
 
-## Document map
+| Document | Purpose & Scope | Primary Audience |
+|---|---|---|
+| 🏛️ **[HLD.md](./HLD.md)** | **System High-Level Design:** Container topology, cross-service sequence flows, RabbitMQ messaging topology, PostgreSQL schema ownership, hybrid graph wiring, and SSRF security. | All Engineers & Architects |
+| ☕ **[control-plane/LLD.md](./control-plane/LLD.md)** | **Control Plane Low-Level Design:** Java 21 / Spring Boot vertical slices, REST endpoints (`/api/v1/**`), Flyway DDL (`public.*`), Quartz clustered scheduler, Outbox publisher, and SSE streaming projector. | Backend (Java) Engineers |
+| 📋 **[control-plane/FEATURES.md](./control-plane/FEATURES.md)** | **Control Plane Acceptance Criteria:** Feature-by-feature acceptance criteria and test invariants for the control plane. | Java Engineers & QA |
+| 🐍 **[execution-engine/LLD.md](./execution-engine/LLD.md)** | **Execution Engine Low-Level Design:** Python 3.12+ custom DAG walker, `ee.workflow_checkpoints` state machine, distributed run leases, 6-pass semantic validator, durable task workers, and SSRF filtering. | Backend (Python) Engineers |
+| 📋 **[execution-engine/FEATURES.md](./execution-engine/FEATURES.md)** | **Execution Engine Acceptance Criteria:** Feature-by-feature acceptance criteria and test invariants for the execution plane. | Python Engineers & QA |
+| 🔍 **[rag/README.md](./rag/README.md)** | **RAG Service Design:** Ingestion pipeline (`rag-worker`), text extraction, chunking, OpenAI embeddings, and `rag.*` pgvector storage. | Python / AI Engineers |
+| 📜 **[`contracts/`](../contracts/)** | **Canonical JSON Schemas:** Single source of truth for workflow definitions, node manifests, broker commands, and event payloads. | All Engineers |
 
-| Doc | Use when |
-| --- | --- |
-| [00-system-overview.md](./00-system-overview.md) | You need the big picture and service boundaries |
-| [01-service-interactions.md](./01-service-interactions.md) | You need to know how services talk and who owns a flow |
-| [02-shared-contracts.md](./02-shared-contracts.md) | You touch workflow JSON, manifests, or message payloads |
-| [03-messaging.md](./03-messaging.md) | You publish/consume RabbitMQ commands or events |
-| [04-data-ownership.md](./04-data-ownership.md) | You add tables, schemas, or object keys |
-| [05-workflow-wiring.md](./05-workflow-wiring.md) | You need edges, ports, input bindings, or data flow between nodes |
-| [control-plane/](./control-plane/) | You implement `services/control-plane` |
-| [execution-engine/](./execution-engine/) | You implement `services/execution-engine` |
-| [HLD.md](./HLD.md) / [LLD.md](./LLD.md) / [plan.md](./plan.md) | Product architecture, APIs, delivery phases |
+---
 
-Ingest/delete is `services/rag` (`rag-worker`). There is no separate rag design pack; see [01-service-interactions.md](./01-service-interactions.md) and `services/rag/README.md`.
+## 🛡️ The 7 Golden Architectural Invariants
 
-## Service packs
-
-### Control plane (`services/control-plane`)
-
-| Doc | Purpose |
-| --- | --- |
-| [README](./control-plane/README.md) | Entry point and boundaries |
-| [LLD](./control-plane/LLD.md) | Packages, services, tables, APIs, algorithms |
-| [FEATURES](./control-plane/FEATURES.md) | Feature checklist with acceptance criteria |
-| [BUILD-GUIDE](./control-plane/BUILD-GUIDE.md) | Ordered vertical slices to implement |
-
-### Execution engine (`services/execution-engine`)
-
-| Doc | Purpose |
-| --- | --- |
-| [README](./execution-engine/README.md) | Entry point, process roles |
-| [LLD](./execution-engine/LLD.md) | Modules, runtime, nodes, messaging, storage |
-| [FEATURES](./execution-engine/FEATURES.md) | Feature checklist with acceptance criteria |
-| [BUILD-GUIDE](./execution-engine/BUILD-GUIDE.md) | Ordered vertical slices to implement |
-
-## Hard rules (do not violate)
-
-1. **Browser talks only to Spring.** Python is never public.
-2. **Contract-first.** JSON Schema in `contracts/` wins over prose when shapes disagree.
-3. **Separate schema ownership.** Never write into another service’s tables.
-4. **Secrets by reference.** Credential IDs in graphs/messages; plaintext only via internal resolve.
-5. **At-least-once safe.** Every command/event handler is idempotent.
-6. **No arbitrary code/cycles.** Conditions are ASTs; loops are explicit and bounded.
-7. **Dual validation.** Java and Python both reject invalid graphs before run.
-
-## Sources of truth
-
-| Concern | Source |
-| --- | --- |
-| Product scope / phases | `design/plan.md` |
-| System architecture | `design/HLD.md`, `design/LLD.md` |
-| Public HTTP API | `design/LLD.md` §6.3–6.4 |
-| Wire formats | `contracts/**` |
-| This pack | Target design for backend developers |
+1. **Single Public Backend:** The browser communicates *exclusively* with the Spring Boot Control Plane (`/api/v1`, `/hooks/v1`). Python workers, databases, RabbitMQ, and MinIO are strictly private.
+2. **Contract-First Authority:** JSON Schemas in `contracts/` win over prose when shapes disagree.
+3. **Strict Schema Ownership:** Each service writes *only* to its owned database schema:
+   - `public.*` &rarr; Control Plane (Flyway)
+   - `ee.*` &rarr; Execution Engine (`ee.workflow_checkpoints`, `ee.worker_inbox`, `ee.run_leases`)
+   - `rag.*` &rarr; RAG Service (`rag.rag_document_versions`, `rag.rag_chunks`)
+4. **Secrets by Reference:** Persisted graphs and broker messages carry *credential IDs*, never secret values. Workers resolve credentials on-demand via the Control Plane against the run's frozen definition snapshot.
+5. **At-Least-Once Delivery & Idempotency:** All RabbitMQ commands and event projectors use database-backed idempotency tables and transaction outbox/inbox guarantees.
+6. **AST-Driven Control Flow:** Conditions use a validated Abstract Syntax Tree (AST); loops are explicit, bounded, and budgeted. No arbitrary code execution (`eval`/`exec`).
+7. **Dual-Validation Defense:** Graphs are validated by both the Control Plane (pre-publish / pre-run) and the Execution Plane (pre-execution).
