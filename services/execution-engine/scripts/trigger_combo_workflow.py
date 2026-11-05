@@ -30,9 +30,6 @@ import json
 import logging
 from typing import Any
 
-from ai_workflow.config.settings import REPO_ROOT
-from ai_workflow.messaging import constants as mq
-
 from e2e_helpers import (
     WAIT_TIMEOUT_SECONDS,
     E2ERuntime,
@@ -53,6 +50,9 @@ from e2e_helpers import (
     teardown_runtime,
     wait_for_terminal,
 )
+
+from ai_workflow.config.settings import REPO_ROOT
+from ai_workflow.messaging.broker import MessagingNames as mq
 
 logger = logging.getLogger(__name__)
 

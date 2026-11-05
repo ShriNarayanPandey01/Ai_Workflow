@@ -68,7 +68,7 @@ from e2e_helpers import (
 )
 
 from ai_workflow.config.settings import REPO_ROOT
-from ai_workflow.messaging import constants as mq
+from ai_workflow.messaging.broker import MessagingNames as mq
 
 logger = logging.getLogger(__name__)
 

@@ -7,11 +7,10 @@ import aio_pika
 import asyncpg
 
 from ai_workflow.contracts.common.types import JsonValue
-from ai_workflow.messaging import constants as mq
+from ai_workflow.messaging.broker import MessagingNames
 from ai_workflow.messaging.envelope import (
     ExecutionSubject,
     MessageEnvelope,
-    build_event_envelope,
     utc_now_iso,
 )
 from ai_workflow.security.redaction import redact_value
@@ -32,6 +31,7 @@ class EventPublisher:
         self._channel = channel
         self._source = source_envelope
         self._subject = subject
+        self._names = MessagingNames
         self._subject_dict = {
             "workflow_id": str(subject.workflow_id),
             "workflow_version_id": (
@@ -81,7 +81,7 @@ class EventPublisher:
     ) -> int:
         """Build, redact, and publish a contract envelope to the events exchange."""
         sequence = await self.allocate_sequence()
-        envelope = build_event_envelope(
+        envelope = MessageEnvelope.event_dict(
             message_id=uuid4(),
             message_type=message_type,
             correlation_id=self._source.correlation_id,
@@ -92,7 +92,7 @@ class EventPublisher:
             sequence=sequence,
             payload=redact_value(payload),
         )
-        exchange = await self._channel.get_exchange(mq.EVENTS_EXCHANGE)
+        exchange = await self._channel.get_exchange(self._names.EVENTS_EXCHANGE)
         body = json.dumps(envelope, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         await exchange.publish(
             aio_pika.Message(
@@ -107,7 +107,7 @@ class EventPublisher:
     async def publish_execution_started(self) -> int:
         return await self.publish(
             message_type="execution.started",
-            routing_key=mq.EXECUTION_STARTED_ROUTING_KEY,
+            routing_key=self._names.EXECUTION_STARTED_ROUTING_KEY,
             payload={"status": "RUNNING", "started_at": utc_now_iso()},
             idempotency_suffix="execution.started",
         )
@@ -115,7 +115,7 @@ class EventPublisher:
     async def publish_execution_completed(self, *, outputs: JsonValue) -> int:
         return await self.publish(
             message_type="execution.completed",
-            routing_key=mq.EXECUTION_COMPLETED_ROUTING_KEY,
+            routing_key=self._names.EXECUTION_COMPLETED_ROUTING_KEY,
             payload={
                 "status": "SUCCEEDED",
                 "outputs": outputs if isinstance(outputs, dict) else {"value": outputs},
@@ -134,7 +134,7 @@ class EventPublisher:
         event_status = status if status in {"FAILED", "TIMED_OUT"} else "FAILED"
         return await self.publish(
             message_type="execution.failed",
-            routing_key=mq.EXECUTION_FAILED_ROUTING_KEY,
+            routing_key=self._names.EXECUTION_FAILED_ROUTING_KEY,
             payload={
                 "status": event_status,
                 "error": {"code": code, "message": message, "retryable": False},
@@ -167,7 +167,7 @@ class EventPublisher:
             payload["approval_request"] = None
         return await self.publish(
             message_type="execution.waiting",
-            routing_key=mq.EXECUTION_WAITING_ROUTING_KEY,
+            routing_key=self._names.EXECUTION_WAITING_ROUTING_KEY,
             payload=payload,
             idempotency_suffix="execution.waiting",
         )
@@ -175,7 +175,7 @@ class EventPublisher:
     async def publish_execution_cancelled(self, *, reason: str) -> int:
         return await self.publish(
             message_type="execution.cancelled",
-            routing_key=mq.EXECUTION_CANCELLED_ROUTING_KEY,
+            routing_key=self._names.EXECUTION_CANCELLED_ROUTING_KEY,
             payload={
                 "status": "CANCELLED",
                 "reason": reason,
@@ -187,7 +187,7 @@ class EventPublisher:
     async def publish_node_started(self, *, node_id: UUID, node_type: str, attempt: int = 1) -> int:
         return await self.publish(
             message_type="node.started",
-            routing_key=mq.NODE_STARTED_ROUTING_KEY,
+            routing_key=self._names.NODE_STARTED_ROUTING_KEY,
             payload={
                 "node_id": str(node_id),
                 "node_type": node_type,
@@ -208,7 +208,7 @@ class EventPublisher:
     ) -> int:
         return await self.publish(
             message_type="node.completed",
-            routing_key=mq.NODE_COMPLETED_ROUTING_KEY,
+            routing_key=self._names.NODE_COMPLETED_ROUTING_KEY,
             payload={
                 "node_id": str(node_id),
                 "node_type": node_type,
@@ -230,7 +230,7 @@ class EventPublisher:
     ) -> int:
         return await self.publish(
             message_type="node.failed",
-            routing_key=mq.NODE_FAILED_ROUTING_KEY,
+            routing_key=self._names.NODE_FAILED_ROUTING_KEY,
             payload={
                 "node_id": str(node_id),
                 "node_type": node_type,
@@ -243,26 +243,29 @@ class EventPublisher:
         )
 
 
-def publisher_hooks(publisher: EventPublisher):
+class PublisherHooks:
     """Adapt an EventPublisher to the WorkflowRunHooks callback interface."""
-    class _PublisherHooks:
-        async def on_node_started(self, *, node_id: UUID, node_type: str) -> None:
-            await publisher.publish_node_started(node_id=node_id, node_type=node_type)
 
-        async def on_node_completed(
-            self,
-            *,
-            node_id: UUID,
-            node_type: str,
-            outputs: dict[str, JsonValue],
-        ) -> None:
-            await publisher.publish_node_completed(
-                node_id=node_id,
-                node_type=node_type,
-                outputs=outputs,
-            )
+    def __init__(self, publisher: EventPublisher) -> None:
+        self._publisher = publisher
 
-        async def on_node_failed(self, *, node_id: UUID, node_type: str, error: str) -> None:
-            await publisher.publish_node_failed(node_id=node_id, node_type=node_type, message=error)
+    async def on_node_started(self, *, node_id: UUID, node_type: str) -> None:
+        await self._publisher.publish_node_started(node_id=node_id, node_type=node_type)
 
-    return _PublisherHooks()
+    async def on_node_completed(
+        self,
+        *,
+        node_id: UUID,
+        node_type: str,
+        outputs: dict[str, JsonValue],
+    ) -> None:
+        await self._publisher.publish_node_completed(
+            node_id=node_id,
+            node_type=node_type,
+            outputs=outputs,
+        )
+
+    async def on_node_failed(self, *, node_id: UUID, node_type: str, error: str) -> None:
+        await self._publisher.publish_node_failed(
+            node_id=node_id, node_type=node_type, message=error
+        )

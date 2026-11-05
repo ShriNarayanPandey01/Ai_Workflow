@@ -111,21 +111,21 @@ async def test_handler_runs_workflow_for_new_claim(
 
     original_postgres = handler_module.PostgresCheckpointer
     original_publisher = handler_module.EventPublisher
-    original_hooks = handler_module.publisher_hooks
+    original_hooks = handler_module.PublisherHooks
     handler_module.PostgresCheckpointer = MagicMock(return_value=checkpointer)
     handler_module.EventPublisher = MagicMock(return_value=publisher)
     hooks = MagicMock()
     hooks.on_node_started = AsyncMock()
     hooks.on_node_completed = AsyncMock()
     hooks.on_node_failed = AsyncMock()
-    handler_module.publisher_hooks = MagicMock(return_value=hooks)
+    handler_module.PublisherHooks = MagicMock(return_value=hooks)
 
     try:
         await handler.handle(execution_start_body)
     finally:
         handler_module.PostgresCheckpointer = original_postgres
         handler_module.EventPublisher = original_publisher
-        handler_module.publisher_hooks = original_hooks
+        handler_module.PublisherHooks = original_hooks
 
     handler._inbox.mark_completed.assert_awaited_once()
     publisher.publish_execution_started.assert_awaited_once()

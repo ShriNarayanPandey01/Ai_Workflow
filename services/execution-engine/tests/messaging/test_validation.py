@@ -6,10 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from ai_workflow.messaging.validation import (
-    EnvelopeValidationError,
-    validate_envelope_document,
-)
+from ai_workflow.messaging.envelope import EnvelopeValidationError, EnvelopeValidator
 
 
 def test_validate_execution_start_fixture(repo_contracts_root: Path) -> None:
@@ -17,7 +14,7 @@ def test_validate_execution_start_fixture(repo_contracts_root: Path) -> None:
         repo_contracts_root / "fixtures" / "valid" / "envelope-execution-start.json"
     )
     document = json.loads(fixture_path.read_text(encoding="utf-8"))
-    validate_envelope_document(document, contracts_root=repo_contracts_root)
+    EnvelopeValidator(repo_contracts_root).validate(document)
 
 
 def test_validate_rejects_command_with_sequence(
@@ -53,4 +50,4 @@ def test_validate_rejects_command_with_sequence(
         },
     }
     with pytest.raises(EnvelopeValidationError):
-        validate_envelope_document(document, contracts_root=repo_contracts_root)
+        EnvelopeValidator(repo_contracts_root).validate(document)

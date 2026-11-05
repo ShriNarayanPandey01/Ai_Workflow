@@ -189,6 +189,8 @@ def build_runtime_registry(
     strict_catalog: bool = False,
     catalog_dir: Path | None = None,
 ) -> RuntimeRegistry:
-    """Create an empty registry and build it against the contracts catalog."""
+    """Create an empty registry and build it against the contracts catalog.
+       Used by execution api
+    """
     registry = RuntimeRegistry(contracts_root=contracts_root)
     return registry.build(strict_catalog=strict_catalog, catalog_dir=catalog_dir)

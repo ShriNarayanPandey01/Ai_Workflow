@@ -76,10 +76,24 @@ export const AppShell = () => {
           expanded ? "w-[200px]" : "w-14",
         )}
       >
-        <div className="flex h-12 items-center justify-center border-b">
+        <div className="flex h-12 items-center gap-2 border-b px-2">
+          <span className="grid size-7 shrink-0 place-items-center text-sidebar-foreground" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 18 18">
+              <rect x="1.5" y="1.5" width="15" height="15" rx="3" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <circle cx="5.5" cy="6.5" r="1.4" fill="var(--primary)" />
+              <circle cx="5.5" cy="11.5" r="1.4" fill="var(--node-human)" />
+              <path d="M8 6.5h4M8 11.5h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </span>
+          {expanded ? (
+            <span className="truncate font-display text-sm font-bold tracking-tight [font-stretch:112%]">
+              ai-workflow
+            </span>
+          ) : null}
           <Button
             variant="ghost"
             size="icon"
+            className="ml-auto"
             aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
             onClick={() => setExpanded((value) => !value)}
           >
@@ -105,8 +119,10 @@ export const AppShell = () => {
                     aria-label={item.label}
                     className={({ isActive }) =>
                       cn(
-                        "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-sidebar-accent",
-                        isActive && "bg-sidebar-accent font-medium",
+                        "relative flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-sidebar-accent",
+                        isActive &&
+                          "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:top-1/2 before:-translate-y-1/2",
+                        isActive && "before:left-0 before:h-4 before:w-0.5 before:rounded-full before:bg-primary",
                       )
                     }
                   >
@@ -145,7 +161,7 @@ export const AppShell = () => {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" aria-label="User menu">
+              <Button variant="ghost" size="sm" className="font-mono text-xs" aria-label="User menu">
                 {user?.email}
               </Button>
             </DropdownMenuTrigger>

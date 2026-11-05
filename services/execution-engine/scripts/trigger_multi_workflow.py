@@ -56,7 +56,7 @@ from trigger_full_features_workflow import (
 )
 
 from ai_workflow.config.settings import REPO_ROOT
-from ai_workflow.messaging import constants as mq
+from ai_workflow.messaging.broker import MessagingNames as mq
 
 FIXTURES_DIR = REPO_ROOT / "contracts" / "fixtures" / "valid"
 CHECKPOINT_FIXTURE = FIXTURES_DIR / "workflow-e2e-checkpoint-retry.json"

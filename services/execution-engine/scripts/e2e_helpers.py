@@ -25,9 +25,8 @@ from starlette.routing import Route
 from uvicorn import Config, Server
 
 from ai_workflow.config.settings import SERVICE_ROOT, Settings, load_settings
-from ai_workflow.messaging import constants as mq
-from ai_workflow.messaging.consumer import connect_rabbitmq
-from ai_workflow.messaging.topology import declare_durable_queue, declare_topology
+from ai_workflow.messaging.broker import MessagingNames as mq
+from ai_workflow.messaging.broker import RabbitBroker
 from ai_workflow.runtime.action_keys import PostgresActionKeyStore
 from ai_workflow.runtime.bootstrap import build_runner_registry
 from ai_workflow.runtime.cancel import CancelRegistry
@@ -780,12 +779,13 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
         max_size=max(settings.worker_prefetch + 4, 10),
     )
 
-    connection = await connect_rabbitmq(
+    broker = RabbitBroker()
+    connection = await broker.connect(
         settings.rabbitmq_url, attempts=15, delay_seconds=1.0, role="execution-worker"
     )
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=settings.worker_prefetch)
-    await declare_topology(channel)
+    await broker.declare_topology(channel)
 
     credential_resolver = build_credential_resolver(
         control_plane_url=settings.control_plane_internal_url,
@@ -811,7 +811,7 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
     semaphore = asyncio.Semaphore(settings.worker_prefetch)
 
     async def _purge(name: str) -> aio_pika.abc.AbstractQueue:
-        declared = await declare_durable_queue(channel, name)
+        declared = await broker.declare_durable_queue(channel, name)
         purged = await declared.purge()
         if purged:
             logger.info("Purged %s stale message(s) from %s", purged, name)

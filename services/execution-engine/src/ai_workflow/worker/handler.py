@@ -15,13 +15,16 @@ from ai_workflow.config.settings import Settings
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.log_context import execution_log_extra
 from ai_workflow.messaging.envelope import (
-    parse_execution_cancel,
-    parse_execution_resume,
-    parse_execution_start,
+    EnvelopeValidationError,
+    EnvelopeValidator,
+    ExecutionSubject,
+    MessageEnvelope,
+    ParsedExecutionCancel,
+    ParsedExecutionResume,
+    ParsedExecutionStart,
 )
 from ai_workflow.messaging.inbox import ClaimResult, PostgresInbox
-from ai_workflow.messaging.publisher import EventPublisher, publisher_hooks
-from ai_workflow.messaging.validation import EnvelopeValidationError, validate_envelope_document
+from ai_workflow.messaging.publisher import EventPublisher, PublisherHooks
 from ai_workflow.runtime.action_keys import PostgresActionKeyStore
 from ai_workflow.runtime.bootstrap import build_runner_registry
 from ai_workflow.runtime.cancel import CancelRegistry
@@ -139,6 +142,7 @@ class ExecutionCommandHandler:
             pool,
             stale_after=timedelta(seconds=settings.max_run_seconds + 60),
         )
+        self._envelope_validator = EnvelopeValidator(settings.contracts_root)
         self._leases = lease_store
         self._definitions = definition_store
         self._http_client = http_client
@@ -193,12 +197,8 @@ class ExecutionCommandHandler:
         depending on whether a checkpoint already exists for the run_id.
         Publishes completed/waiting/failed events and marks the inbox row done.
         """
-        validate_envelope_document(
-            raw,
-            contracts_root=self._settings.contracts_root,
-            source="execution.start",
-        )
-        parsed = parse_execution_start(raw)
+        self._envelope_validator.validate(raw, source="execution.start")
+        parsed = ParsedExecutionStart.from_document(raw)
         if parsed.envelope.message_type != "execution.start":
             msg = f"Unexpected message type: {parsed.envelope.message_type}"
             raise EnvelopeValidationError(msg)
@@ -231,7 +231,7 @@ class ExecutionCommandHandler:
         )
 
         checkpointer = PostgresCheckpointer(self._pool)
-        hooks = publisher_hooks(publisher)
+        hooks = PublisherHooks(publisher)
         dispatcher = RabbitTaskDispatcher(
             channel=self._channel,
             source_envelope=parsed.envelope,
@@ -320,12 +320,8 @@ class ExecutionCommandHandler:
         command against the stored interrupt metadata, applies the decision,
         and publishes the resulting outcome event.
         """
-        validate_envelope_document(
-            raw,
-            contracts_root=self._settings.contracts_root,
-            source="execution.resume",
-        )
-        parsed = parse_execution_resume(raw)
+        self._envelope_validator.validate(raw, source="execution.resume")
+        parsed = ParsedExecutionResume.from_document(raw)
         if parsed.envelope.message_type != "execution.resume":
             msg = f"Unexpected message type: {parsed.envelope.message_type}"
             raise EnvelopeValidationError(msg)
@@ -357,7 +353,7 @@ class ExecutionCommandHandler:
             subject=parsed.subject,
         )
         checkpointer = PostgresCheckpointer(self._pool)
-        hooks = publisher_hooks(publisher)
+        hooks = PublisherHooks(publisher)
         dispatcher = RabbitTaskDispatcher(
             channel=self._channel,
             source_envelope=parsed.envelope,
@@ -435,12 +431,8 @@ class ExecutionCommandHandler:
         ``_execute_loop`` can exit cleanly. If no checkpoint exists (run never
         started), publishes ``execution.cancelled`` immediately.
         """
-        validate_envelope_document(
-            raw,
-            contracts_root=self._settings.contracts_root,
-            source="execution.cancel",
-        )
-        parsed = parse_execution_cancel(raw)
+        self._envelope_validator.validate(raw, source="execution.cancel")
+        parsed = ParsedExecutionCancel.from_document(raw)
         if parsed.envelope.message_type != "execution.cancel":
             msg = f"Unexpected message type: {parsed.envelope.message_type}"
             raise EnvelopeValidationError(msg)
@@ -492,12 +484,7 @@ class ExecutionCommandHandler:
     async def _handle_task_result(self, raw: dict[str, Any]) -> None:
         """Resume a waiting parent run from task.completed / task.failed events."""
         envelope_type = str(raw.get("message_type"))
-        validate_envelope_document(
-            raw,
-            contracts_root=self._settings.contracts_root,
-            source=envelope_type,
-        )
-        from ai_workflow.messaging.envelope import ExecutionSubject, MessageEnvelope
+        self._envelope_validator.validate(raw, source=envelope_type)
 
         envelope = MessageEnvelope.model_validate(raw)
         subject = ExecutionSubject.model_validate(envelope.subject)
@@ -586,7 +573,7 @@ class ExecutionCommandHandler:
                 definition=definition,
                 registry=self._registry,
                 checkpointer=checkpointer,
-                hooks=publisher_hooks(publisher),
+                hooks=PublisherHooks(publisher),
                 contracts_root=self._settings.contracts_root,
                 max_payload_bytes=self._settings.max_payload_bytes,
                 max_loop_iterations=self._settings.max_loop_iterations,

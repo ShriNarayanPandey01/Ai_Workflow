@@ -7,10 +7,8 @@ import aio_pika
 
 from ai_workflow.config.settings import SERVICE_ROOT, load_settings, require_service_role
 from ai_workflow.log_context import execution_log_extra
-from ai_workflow.messaging import constants as mq
-from ai_workflow.messaging.consumer import connect_rabbitmq, consume_queue
-from ai_workflow.messaging.topology import declare_topology
-from ai_workflow.messaging.validation import EnvelopeValidationError
+from ai_workflow.messaging.broker import MessagingNames, RabbitBroker
+from ai_workflow.messaging.envelope import EnvelopeValidationError
 from ai_workflow.runtime.cancel import CancelRegistry
 from ai_workflow.runtime.db import create_pool, run_migrations
 from ai_workflow.worker.handler import (
@@ -71,11 +69,12 @@ async def run_worker() -> None:
         logger.info("Applied migrations: %s", ", ".join(applied), extra=extra)
 
     cancel_registry = CancelRegistry(pool)
-
-    connection = await connect_rabbitmq(settings.rabbitmq_url, role=_ROLE)
+    # IGNORE THIS COMMENT: can we have a pause registry as well for pausing workflows?
+    broker = RabbitBroker()
+    connection = await broker.connect(settings.rabbitmq_url, role=_ROLE)
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=settings.worker_prefetch)
-    await declare_topology(channel)
+    await broker.declare_topology(channel)
 
     handler = build_execution_handler(
         settings=settings,
@@ -93,12 +92,12 @@ async def run_worker() -> None:
 
         asyncio.create_task(_run())
 
-    await consume_queue(channel, mq.EXECUTION_COMMANDS_QUEUE, on_message)
-    await consume_queue(channel, mq.TASK_RESULTS_QUEUE, on_message)
+    await broker.consume(channel, MessagingNames.EXECUTION_COMMANDS_QUEUE, on_message)
+    await broker.consume(channel, MessagingNames.TASK_RESULTS_QUEUE, on_message)
     logger.info(
         "Execution worker listening on %s and %s",
-        mq.EXECUTION_COMMANDS_QUEUE,
-        mq.TASK_RESULTS_QUEUE,
+        MessagingNames.EXECUTION_COMMANDS_QUEUE,
+        MessagingNames.TASK_RESULTS_QUEUE,
         extra=extra,
     )
 
