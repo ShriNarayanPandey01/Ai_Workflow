@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from ai_workflow.runtime.state import WorkflowState
+from ai_workflow.runtime.graph.state import WorkflowState
 from ai_workflow.security.redaction import (
     REDACTED,
     PayloadTooLargeError,

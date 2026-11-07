@@ -56,8 +56,8 @@ Catalog manifests load from repo-root `contracts/nodes/catalog/` (`AIW_CONTRACTS
 Run a linear Input → Output workflow without RabbitMQ:
 
 ```python
-from ai_workflow.runtime.bootstrap import build_runner_registry
-from ai_workflow.runtime.runner import run_workflow
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
+from ai_workflow.runtime.engine.engine import run_workflow
 
 registry = build_runner_registry(contracts_root)
 result = await run_workflow(definition, {"order_id": "ord-1"}, registry=registry)

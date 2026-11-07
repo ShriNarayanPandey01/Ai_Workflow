@@ -11,7 +11,6 @@ from ai_workflow.health.checks import check_readiness
 from ai_workflow.runtime.registry import build_runtime_registry
 
 
-
 def create_app(
     settings: Settings | None = None,
     *,

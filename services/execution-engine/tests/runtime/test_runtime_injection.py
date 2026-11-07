@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from ai_workflow.runtime.bootstrap import build_runner_registry
+
 from ai_workflow.runtime.engine.engine import WorkflowEngine
 from ai_workflow.runtime.engine.invoke import NodeInvoker, RetryingNodeInvoker
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 from ai_workflow.runtime.semantics.validator import CatalogSemanticValidator, SemanticValidator
 
 

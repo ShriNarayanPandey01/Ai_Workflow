@@ -10,7 +10,7 @@ from ai_workflow.log_context import execution_log_extra
 from ai_workflow.messaging.broker import MessagingNames, RabbitBroker
 from ai_workflow.messaging.envelope import EnvelopeValidationError
 from ai_workflow.runtime.cancel import CancelRegistry
-from ai_workflow.runtime.db import create_pool, run_migrations
+from ai_workflow.runtime.persistence.database import create_pool, run_migrations
 from ai_workflow.worker.handler import (
     ExecutionCommandHandler,
     MessageInFlightError,

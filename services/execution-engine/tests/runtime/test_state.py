@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ai_workflow.runtime.state import WorkflowState
+from ai_workflow.runtime.graph.state import WorkflowState
 
 
 def test_node_outputs_are_namespaced_by_node_id() -> None:

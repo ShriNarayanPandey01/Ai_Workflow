@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.nodes.base import ExecutionContext, NodeResult
-from ai_workflow.runtime.interrupt import WorkflowInterrupt
+from ai_workflow.runtime.graph.interrupt import WorkflowInterrupt
 
 
 class HumanApprovalNodeExecutor:

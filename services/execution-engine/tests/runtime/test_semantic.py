@@ -6,7 +6,10 @@ from pathlib import Path
 import pytest
 
 from ai_workflow.contracts.workflow.definition import workflow_from_dict
-from ai_workflow.runtime.semantic import SemanticValidationError, validate_workflow_semantics
+from ai_workflow.runtime.semantics.validator import (
+    SemanticValidationError,
+    validate_workflow_semantics,
+)
 
 
 def test_arbitrary_cycle_rejected(repo_contracts_root: Path) -> None:

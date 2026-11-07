@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_workflow.runtime.condition import (
+from ai_workflow.runtime.semantics.condition import (
     ConditionEvaluationError,
     evaluate_condition,
 )

@@ -6,9 +6,13 @@ import asyncpg
 import pytest
 
 from ai_workflow.config.settings import SERVICE_ROOT
-from ai_workflow.runtime.checkpoint import PostgresCheckpointer, state_from_dict, state_to_dict
-from ai_workflow.runtime.db import create_pool, run_migrations
-from ai_workflow.runtime.state import WorkflowState
+from ai_workflow.runtime.graph.state import WorkflowState
+from ai_workflow.runtime.persistence.checkpoint import (
+    PostgresCheckpointer,
+    state_from_dict,
+    state_to_dict,
+)
+from ai_workflow.runtime.persistence.database import create_pool, run_migrations
 
 pytestmark = pytest.mark.integration
 

@@ -78,7 +78,7 @@ async def test_handler_runs_workflow_for_new_claim(
     execution_start_body: bytes,
     repo_contracts_root: Path,
 ) -> None:
-    from ai_workflow.runtime.bootstrap import build_runner_registry
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     pool = MagicMock()
     channel = MagicMock()
@@ -137,7 +137,7 @@ async def test_handler_ignores_start_while_waiting(
     handler_settings: Settings,
     execution_start_body: bytes,
 ) -> None:
-    from ai_workflow.runtime.state import WorkflowState
+    from ai_workflow.runtime.graph.state import WorkflowState
 
     waiting = WorkflowState()
     waiting.runtime["_interrupt"] = {
@@ -188,7 +188,7 @@ async def test_handler_cancel_waiting_publishes_cancelled(
     handler_settings: Settings,
     repo_contracts_root: Path,
 ) -> None:
-    from ai_workflow.runtime.state import WorkflowState
+    from ai_workflow.runtime.graph.state import WorkflowState
 
     cancel_body = (
         repo_contracts_root / "fixtures" / "valid" / "envelope-execution-cancel.json"

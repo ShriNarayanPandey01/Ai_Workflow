@@ -237,7 +237,7 @@ async def test_collect_summarizes_items() -> None:
 
 @pytest.mark.asyncio
 async def test_collect_overflow_strips_bulk_arrays() -> None:
-    from ai_workflow.runtime.artifact_store import InMemoryArtifactStore
+    from ai_workflow.runtime.persistence.artifact_store import InMemoryArtifactStore
 
     store = InMemoryArtifactStore()
     executor = CollectNodeExecutor(artifact_store=store)

@@ -18,7 +18,6 @@ from ai_workflow.contracts.workflow.definition import (
     WorkflowDefinition,
     WorkflowNode,
 )
-
 from ai_workflow.runtime.semantics.bindings import (
     bindings_for_node,
     edge_connects,

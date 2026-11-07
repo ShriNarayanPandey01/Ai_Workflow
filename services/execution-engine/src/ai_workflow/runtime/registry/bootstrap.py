@@ -27,7 +27,10 @@ from ai_workflow.rag.retrieve_store import (
     RetrieveStore,
 )
 from ai_workflow.runtime.persistence.action_keys import ActionKeyStore
-from ai_workflow.runtime.persistence.artifact_store import FilesystemArtifactStore, InMemoryArtifactStore
+from ai_workflow.runtime.persistence.artifact_store import (
+    FilesystemArtifactStore,
+    InMemoryArtifactStore,
+)
 from ai_workflow.runtime.registry.registry import RuntimeRegistry
 from ai_workflow.security.credentials import (
     CredentialResolver,

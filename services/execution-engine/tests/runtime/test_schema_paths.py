@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ai_workflow.runtime.schema_paths import schema_at_pointer, schemas_compatible
+from ai_workflow.runtime.semantics.schema_paths import schema_at_pointer, schemas_compatible
 
 
 def test_schema_at_pointer_nested_property() -> None:

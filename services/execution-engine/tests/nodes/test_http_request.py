@@ -11,7 +11,10 @@ from ai_workflow.nodes.action.http_request import (
     _request_fingerprint,
 )
 from ai_workflow.nodes.base import ExecutionContext
-from ai_workflow.runtime.action_keys import ActionKeyConflictError, InMemoryActionKeyStore
+from ai_workflow.runtime.persistence.action_keys import (
+    ActionKeyConflictError,
+    InMemoryActionKeyStore,
+)
 from ai_workflow.security.credentials import StaticCredentialResolver
 from ai_workflow.security.http_client import SafeHttpClient
 from ai_workflow.security.ssrf import fake_resolver

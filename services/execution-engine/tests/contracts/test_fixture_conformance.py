@@ -35,7 +35,7 @@ from ai_workflow.contracts.workflow.definition import (
     workflow_from_dict,
 )
 from ai_workflow.messaging.envelope import EnvelopeValidationError, EnvelopeValidator
-from ai_workflow.runtime.semantic import (
+from ai_workflow.runtime.semantics.validator import (
     SemanticValidationError,
     validate_workflow_semantics,
 )

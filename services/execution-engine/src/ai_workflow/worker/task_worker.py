@@ -13,9 +13,9 @@ from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.log_context import execution_log_extra
 from ai_workflow.messaging.broker import MessagingNames, RabbitBroker
 from ai_workflow.messaging.envelope import MessageEnvelope
-from ai_workflow.runtime.bootstrap import build_runner_registry
 from ai_workflow.runtime.cancel import CancelRegistry
-from ai_workflow.runtime.db import create_pool, run_migrations
+from ai_workflow.runtime.persistence.database import create_pool, run_migrations
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 from ai_workflow.security.redaction import redact_value
 from ai_workflow.tasks.base import TaskContext
 from ai_workflow.tasks.checkpoints import PostgresTaskCheckpointStore

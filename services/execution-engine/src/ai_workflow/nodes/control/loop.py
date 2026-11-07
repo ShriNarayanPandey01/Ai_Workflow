@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.nodes.base import ExecutionContext, NodeResult
-from ai_workflow.runtime.condition import evaluate_condition
+from ai_workflow.runtime.semantics.condition import evaluate_condition
 
 
 class LoopNodeExecutor:

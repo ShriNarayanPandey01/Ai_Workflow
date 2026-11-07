@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.nodes.base import ExecutionContext, NodeResult
-from ai_workflow.runtime.artifact_store import (
+from ai_workflow.runtime.persistence.artifact_store import (
     ArtifactStore,
     InMemoryArtifactStore,
     payload_size_bytes,
