@@ -39,13 +39,9 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="AIW_LOG_LEVEL")
     contracts_root: Path = Field(default=DEFAULT_CONTRACTS_ROOT, alias="AIW_CONTRACTS_ROOT")
 
-    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
-    openai_base_url: str = Field(
-        default="https://api.openai.com/v1",
-        alias="AIW_OPENAI_BASE_URL",
-    )
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     embedding_model: str = Field(
-        default="text-embedding-3-small",
+        default="gemini-embedding-001",
         alias="AIW_EMBEDDING_MODEL",
     )
     embedding_dimensions: int = Field(
@@ -78,7 +74,7 @@ class Settings(BaseSettings):
         return Path(str(value))
 
     @field_validator(
-        "openai_api_key",
+        "gemini_api_key",
         "control_plane_internal_url",
         "internal_auth_token",
         "minio_endpoint",

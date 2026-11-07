@@ -87,7 +87,7 @@ All authoritative system architecture, specifications, and low-level designs res
 | **Execution Engine LLD** | [design/execution-engine/LLD.md](design/execution-engine/LLD.md) | **Python Execution Plane**: Custom DAG walker/interpreter, `ee.workflow_checkpoints`, distributed run leases, semantic validator. |
 | **Execution Engine Features** | [design/execution-engine/FEATURES.md](design/execution-engine/FEATURES.md) | **Execution Plane Acceptance Criteria**: F1–F16 execution criteria, checkpointer semantics, retry, pause/resume, and loop caps. |
 | **Python Execution Rules** | [.agents/rules/execution-engine.md](.agents/rules/execution-engine.md) | **Python Standards**: No LangGraph rule, async-first I/O, Pydantic v2, SSRF protection, process role boundaries. |
-| **RAG Service Design** | [design/rag/README.md](design/rag/README.md) | **RAG Pipeline**: MinIO download, chunking, OpenAI embeddings, `rag.*` pgvector storage, and inbox deduplication. |
+| **RAG Service Design** | [design/rag/README.md](design/rag/README.md) | **RAG Pipeline**: MinIO download, chunking, Gemini embeddings, `rag.*` pgvector storage, and inbox deduplication. |
 | **Web Frontend Guide** | [apps/web/README.md](apps/web/README.md) | **React / Vite Workbench**: Development server, proxy configuration (`/api` -> `8080`), and UI build commands. |
 
 ---

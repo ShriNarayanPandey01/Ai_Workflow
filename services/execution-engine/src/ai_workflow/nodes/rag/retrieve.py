@@ -16,7 +16,7 @@ class RetrieveNodeExecutor:
         *,
         store: RetrieveStore,
         embedding_provider: EmbeddingProvider,
-        embedding_model: str = "text-embedding-3-small",
+        embedding_model: str = "gemini-embedding-001",
         embedding_dimensions: int = 1536,
     ) -> None:
         self._store = store
@@ -64,6 +64,7 @@ class RetrieveNodeExecutor:
                 texts=[text],
                 model=self._embedding_model,
                 dimensions=self._embedding_dimensions,
+                task_type="RETRIEVAL_QUERY",
             )
         )
         hits = await self._store.similarity_search(

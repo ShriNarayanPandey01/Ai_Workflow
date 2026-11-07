@@ -200,7 +200,10 @@ export const WorkflowBuilder = () => {
   const handleAddNode = (type: string) => {
     mutate((def) => ({
       ...def,
-      nodes: [...def.nodes, newNode(type, { x: 120 + def.nodes.length * 24, y: 80 })],
+      nodes: [
+        ...def.nodes,
+        newNode(type, { x: 120 + def.nodes.length * 24, y: 80 }, findManifest(catalog, type)),
+      ],
     }))
   }
 

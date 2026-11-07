@@ -57,7 +57,7 @@
       "type": "ai.chat-model@1",
       "position": { "x": 700, "y": 40 },
       "config": {
-        "model": "gpt-4o-mini",
+        "model": "meta-models/muse-spark-open-1026",
         "max_output_tokens": 128,
         "timeout_seconds": 60,
         "temperature": 0

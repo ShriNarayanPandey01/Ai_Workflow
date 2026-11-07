@@ -67,16 +67,20 @@ class Settings(BaseSettings):
     )
     contracts_root: Path = Field(default=DEFAULT_CONTRACTS_ROOT, alias="AIW_CONTRACTS_ROOT")
 
-    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
-    openai_base_url: str = Field(
-        default="https://api.openai.com/v1",
-        alias="AIW_OPENAI_BASE_URL",
+    baseten_api_key: str | None = Field(default=None, alias="BASETEN_API_KEY")
+    chat_base_url: str = Field(
+        default="https://inference.baseten.co/v1",
+        alias="AIW_CHAT_BASE_URL",
     )
-    openai_model: str = Field(default="gpt-4o-mini", alias="AIW_OPENAI_MODEL")
+    chat_model: str = Field(
+        default="meta-models/muse-spark-open-1026",
+        alias="AIW_CHAT_MODEL",
+    )
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     fake_llm: bool = Field(default=False, alias="AIW_FAKE_LLM")
     fake_embeddings: bool = Field(default=False, alias="AIW_FAKE_EMBEDDINGS")
     embedding_model: str = Field(
-        default="text-embedding-3-small",
+        default="gemini-embedding-001",
         alias="AIW_EMBEDDING_MODEL",
     )
     embedding_dimensions: int = Field(default=1536, alias="AIW_EMBEDDING_DIMENSIONS", ge=8)
@@ -103,7 +107,7 @@ class Settings(BaseSettings):
             return value
         return Path(str(value))
 
-    @field_validator("openai_api_key", mode="before")
+    @field_validator("baseten_api_key", "gemini_api_key", mode="before")
     @classmethod
     def _empty_key_to_none(cls, value: object) -> object:
         if value is None:

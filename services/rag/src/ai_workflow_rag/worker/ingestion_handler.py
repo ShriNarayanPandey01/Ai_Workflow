@@ -190,8 +190,7 @@ def build_ingestion_handler(
     inbox = PostgresInbox(pool)
     provider = embedding_provider or build_embedding_provider(
         fake_embeddings=settings.fake_embeddings,
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
+        gemini_api_key=settings.gemini_api_key,
         dimensions=settings.embedding_dimensions,
     )
     resolved_download = download_client

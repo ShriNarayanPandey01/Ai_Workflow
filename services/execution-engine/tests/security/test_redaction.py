@@ -28,7 +28,7 @@ def test_redact_value_hides_sensitive_keys() -> None:
 
 def test_redact_value_hides_compound_secret_keys() -> None:
     value = {
-        "openai_api_key": "sk-live-123",
+        "baseten_api_key": "baseten-live-test",
         "client_secret": "csx",
         "webhook_secret": "whsec",
         "private_key": "-----BEGIN",
@@ -39,7 +39,7 @@ def test_redact_value_hides_compound_secret_keys() -> None:
 
     redacted = redact_value(value)
 
-    assert redacted["openai_api_key"] == REDACTED
+    assert redacted["baseten_api_key"] == REDACTED
     assert redacted["client_secret"] == REDACTED
     assert redacted["webhook_secret"] == REDACTED
     assert redacted["private_key"] == REDACTED

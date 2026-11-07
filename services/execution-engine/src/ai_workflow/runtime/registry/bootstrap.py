@@ -65,8 +65,8 @@ def build_runner_registry(
     elif settings is not None:
         provider = build_chat_provider(
             fake_llm=settings.fake_llm,
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url,
+            api_key=settings.baseten_api_key,
+            base_url=settings.chat_base_url,
         )
     else:
         provider = FakeChatProvider()
@@ -76,7 +76,7 @@ def build_runner_registry(
         resolver = build_credential_resolver(
             control_plane_url=settings.control_plane_internal_url,
             internal_auth_token=settings.internal_auth_token,
-            openai_api_key=settings.openai_api_key,
+            chat_api_key=settings.baseten_api_key,
         )
     if resolver is None:
         resolver = StaticCredentialResolver({})
@@ -88,8 +88,7 @@ def build_runner_registry(
     elif settings is not None:
         embedder = build_embedding_provider(
             fake_embeddings=settings.fake_embeddings,
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url,
+            gemini_api_key=settings.gemini_api_key,
             dimensions=settings.embedding_dimensions,
         )
     else:
@@ -103,7 +102,7 @@ def build_runner_registry(
         store = InMemoryRetrieveStore()
 
     embedding_model = (
-        settings.embedding_model if settings is not None else "text-embedding-3-small"
+        settings.embedding_model if settings is not None else "gemini-embedding-001"
     )
     embedding_dimensions = settings.embedding_dimensions if settings is not None else 1536
 
@@ -137,7 +136,9 @@ def build_runner_registry(
         lambda: ChatModelNodeExecutor(
             provider=provider,
             credential_resolver=resolver,
-            default_base_url=settings.openai_base_url if settings is not None else "https://api.openai.com/v1",
+            default_base_url=settings.chat_base_url
+            if settings is not None
+            else "https://inference.baseten.co/v1",
         ),
         node_type="ai.chat-model@1",
     )

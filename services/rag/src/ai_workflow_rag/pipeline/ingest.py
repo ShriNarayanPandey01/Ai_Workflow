@@ -179,6 +179,7 @@ class IngestPipeline:
                     texts=[chunk.text for chunk in batch],
                     model=model,
                     dimensions=self._embedding_dimensions,
+                    task_type="RETRIEVAL_DOCUMENT",
                 )
             )
             vectors.extend(embedded)

@@ -10,7 +10,7 @@ Before modifying code in this service, refer to the authoritative documents belo
 
 | Document | Path | Purpose & When to Read |
 |---|---|---|
-| **RAG Service Design** | [design/rag/README.md](../../design/rag/README.md) | **Primary technical blueprint**: Ingestion pipeline flow, chunking strategy, OpenAI embeddings, `rag.*` DDL & pgvector indexes, and idempotency inbox protocol. |
+| **RAG Service Design** | [design/rag/README.md](../../design/rag/README.md) | **Primary technical blueprint**: Ingestion pipeline flow, chunking strategy, Gemini embeddings, `rag.*` DDL & pgvector indexes, and idempotency inbox protocol. |
 | **System High-Level Design** | [design/HLD.md](../../design/HLD.md) | **System topology**: Cross-service interaction flows, MinIO download intents, RabbitMQ broker topology, and service boundaries. |
 | **Shared Contracts** | [contracts/README.md](../../contracts/README.md) | **Canonical JSON schemas**: Ingestion commands (`document.ingest.v1`, `document.delete.v1`) and event schemas (`document.ingestion.*.v1`). |
 | **Local Run Guide** | [README.md](./README.md) | Local environment startup, boundaries, process roles, and tests. |
@@ -47,7 +47,7 @@ src/ai_workflow_rag/
 ├── health/        # Database and broker probe checks
 ├── messaging/     # RabbitMQ topology, envelope codecs, inbox deduplication
 ├── pipeline/      # Document download, text extraction, semantic chunking, and embedding
-├── providers/     # Embedding client (OpenAI text-embedding-3-small/large)
+├── providers/     # Gemini gemini-embedding-001 embeddings
 ├── security/      # Presigned download intent verification
 ├── store/         # pgvector schema queries and document store
 └── worker/        # Entrypoint for rag-worker background process

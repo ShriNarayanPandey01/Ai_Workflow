@@ -118,20 +118,24 @@ def test_require_service_role_rejects_mismatch() -> None:
         require_service_role(settings, "execution-worker")
 
 
-def test_openai_settings_and_fake_llm_coercion(
+def test_baseten_and_gemini_settings_and_fake_llm_coercion(
     valid_env: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.setenv("AIW_OPENAI_BASE_URL", "https://example.test/v1")
-    monkeypatch.setenv("AIW_OPENAI_MODEL", "gpt-test")
+    monkeypatch.setenv("BASETEN_API_KEY", "baseten-test")
+    monkeypatch.setenv("AIW_CHAT_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("AIW_CHAT_MODEL", "meta-models/muse-spark-open-1026")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-test")
     monkeypatch.setenv("AIW_FAKE_LLM", "false")
 
     settings = load_settings(env_file=None)
 
-    assert settings.openai_api_key == "sk-test"
-    assert settings.openai_base_url == "https://example.test/v1"
-    assert settings.openai_model == "gpt-test"
+    assert settings.baseten_api_key == "baseten-test"
+    assert settings.chat_base_url == "https://example.test/v1"
+    assert settings.chat_model == "meta-models/muse-spark-open-1026"
+    assert settings.gemini_api_key == "gemini-test"
+    assert settings.embedding_model == "gemini-embedding-001"
+    assert settings.embedding_dimensions == 1536
     assert settings.fake_llm is False
 
 

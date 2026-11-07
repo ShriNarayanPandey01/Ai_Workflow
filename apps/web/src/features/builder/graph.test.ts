@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { NodeManifest, WorkflowNode } from "@/api/types"
-import { defaultBindingsForEdge, portsCompatible } from "./graph"
+import { defaultBindingsForEdge, newNode, portsCompatible } from "./graph"
 
 const port = (name: string, direction: "input" | "output", type: string) => ({
   name,
@@ -55,5 +55,21 @@ describe("defaultBindingsForEdge", () => {
     const bindings = defaultBindingsForEdge(catalog, source, target, "text", "prompt")
     expect(bindings[0]?.origin).toBe("default")
     expect(bindings[0]?.target_path).toBe("/text")
+  })
+})
+
+describe("newNode", () => {
+  it("applies catalog config defaults", () => {
+    const chatManifest = {
+      ...manifest("ai.chat-model@1", [], []),
+      config_schema: {
+        type: "object",
+        properties: { model: { type: "string", default: "meta-models/muse-spark-open-1026" } },
+      },
+    }
+
+    expect(newNode(chatManifest.type, { x: 0, y: 0 }, chatManifest).config).toEqual({
+      model: "meta-models/muse-spark-open-1026",
+    })
   })
 })

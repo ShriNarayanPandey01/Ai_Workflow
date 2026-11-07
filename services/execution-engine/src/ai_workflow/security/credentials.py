@@ -13,7 +13,7 @@ from ai_workflow.security.service_auth import ServiceAuthProvider
 # (POST /internal/v1/executions/{runId}/credentials:resolve). Secrets exist
 # only for the duration of resolve() plus the provider call.
 # EnvCredentialResolver is a local-dev fallback when no control-plane URL is
-# configured: it can supply only the provider slot from OPENAI_API_KEY.
+# configured: it can supply only the provider slot from BASETEN_API_KEY.
 
 
 class CredentialResolver(Protocol):
@@ -52,7 +52,7 @@ class StaticCredentialResolver:
 
 
 class EnvCredentialResolver:
-    """Dev fallback: OPENAI_API_KEY for the provider slot only."""
+    """Dev fallback: BASETEN_API_KEY for the provider slot only."""
 
     def __init__(self, api_key: str | None) -> None:
         self._api_key = api_key
@@ -138,13 +138,13 @@ def build_credential_resolver(
     *,
     control_plane_url: str | None,
     internal_auth_token: str | None,
-    openai_api_key: str | None,
+    chat_api_key: str | None,
     client: httpx.AsyncClient | None = None,
 ) -> CredentialResolver:
     """Choose HTTP (control-plane) or env fallback credential resolution.
 
     HTTP is used whenever ``control_plane_url`` is set. The env fallback only
-    covers slot ``provider`` from ``OPENAI_API_KEY`` for local fake/real LLM
+    covers slot ``provider`` from ``BASETEN_API_KEY`` for local fake/real LLM
     without a control plane.
     """
     if control_plane_url:
@@ -157,4 +157,4 @@ def build_credential_resolver(
             client=http_client,
             service_auth=auth,
         )
-    return EnvCredentialResolver(openai_api_key)
+    return EnvCredentialResolver(chat_api_key)

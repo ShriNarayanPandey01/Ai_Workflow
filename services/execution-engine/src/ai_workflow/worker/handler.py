@@ -152,7 +152,7 @@ class ExecutionCommandHandler:
             self._credential_resolver = build_credential_resolver(
                 control_plane_url=settings.control_plane_internal_url,
                 internal_auth_token=settings.internal_auth_token,
-                openai_api_key=settings.openai_api_key,
+                chat_api_key=settings.baseten_api_key,
             )
 
     async def aclose(self) -> None:
@@ -241,8 +241,10 @@ class ExecutionCommandHandler:
             await publisher.publish_execution_started()
 
         existing = await checkpointer.load(thread_id=parsed.subject.run_id)
+        lease_acquired = False
         try:
             await self._acquire_lease(parsed.subject.run_id)
+            lease_acquired = True
             if existing is not None and get_interrupt(existing) is not None:
                 logger.info(
                     "Skipping execution.start for waiting run %s",
@@ -257,6 +259,8 @@ class ExecutionCommandHandler:
                 return
             cancel_request = await self._cancel_registry.is_cancelled(parsed.subject.run_id)
             if cancel_request is not None:
+                await self._release_lease(parsed.subject.run_id)
+                lease_acquired = False
                 await publisher.publish_execution_cancelled(reason=cancel_request.reason)
                 await self._inbox.mark_completed(message_id=parsed.envelope.message_id)
                 return
@@ -295,6 +299,9 @@ class ExecutionCommandHandler:
             await self._inbox.mark_failed(message_id=parsed.envelope.message_id)
             raise
         except WorkflowRunTimedOut as exc:
+            if lease_acquired:
+                await self._release_lease(parsed.subject.run_id)
+                lease_acquired = False
             await publisher.publish_execution_failed(
                 code="TIMED_OUT",
                 message=str(exc),
@@ -303,11 +310,15 @@ class ExecutionCommandHandler:
             await self._inbox.mark_failed(message_id=parsed.envelope.message_id)
             return
         except WorkflowRunError as exc:
+            if lease_acquired:
+                await self._release_lease(parsed.subject.run_id)
+                lease_acquired = False
             await publisher.publish_execution_failed(code="WORKFLOW_RUN_FAILED", message=str(exc))
             await self._inbox.mark_failed(message_id=parsed.envelope.message_id)
             return
         finally:
-            await self._release_lease(parsed.subject.run_id)
+            if lease_acquired:
+                await self._release_lease(parsed.subject.run_id)
 
         await _publish_outcome(publisher, outcome)
         await self._cancel_registry.clear(parsed.subject.run_id)

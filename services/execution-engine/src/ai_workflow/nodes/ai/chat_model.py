@@ -20,7 +20,7 @@ class ChatModelNodeExecutor:
         self,
         provider: ChatProvider | None = None,
         credential_resolver: CredentialResolver | None = None,
-        default_base_url: str = "https://api.openai.com/v1",
+        default_base_url: str = "https://inference.baseten.co/v1",
     ) -> None:
         self._default_provider = provider or FakeChatProvider()
         self._credential_resolver = credential_resolver

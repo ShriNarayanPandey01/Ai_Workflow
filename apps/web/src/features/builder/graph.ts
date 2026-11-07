@@ -1,4 +1,4 @@
-import type { InputBinding, NodeManifest, PortDefinition, WorkflowDefinition, WorkflowEdge, WorkflowNode } from "@/api/types"
+import type { InputBinding, JsonValue, NodeManifest, PortDefinition, WorkflowDefinition, WorkflowEdge, WorkflowNode } from "@/api/types"
 
 export const cloneDefinition = (definition: WorkflowDefinition): WorkflowDefinition => {
   return structuredClone(definition)
@@ -97,12 +97,26 @@ export const applyEdgeBindings = (
   return next
 }
 
-export const newNode = (type: string, position: { x: number; y: number }): WorkflowNode => {
+export const newNode = (
+  type: string,
+  position: { x: number; y: number },
+  manifest?: NodeManifest,
+): WorkflowNode => {
+  const properties = manifest?.config_schema.properties
+  const config: Record<string, JsonValue> = {}
+  if (properties && typeof properties === "object" && !Array.isArray(properties)) {
+    for (const [key, field] of Object.entries(properties)) {
+      if (field && typeof field === "object" && !Array.isArray(field) && "default" in field) {
+        const defaultValue = field.default
+        if (defaultValue !== undefined) config[key] = defaultValue
+      }
+    }
+  }
   return {
     id: crypto.randomUUID(),
     type,
     position,
-    config: {},
+    config,
     credential_refs: {},
     resource_refs: {},
     input_bindings: [],

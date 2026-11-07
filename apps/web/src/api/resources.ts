@@ -135,7 +135,7 @@ export const datasetApi = {
   create: (projectId: string, name: string) =>
     apiJson<Dataset>(`/api/v1/projects/${projectId}/datasets`, {
       method: "POST",
-      body: JSON.stringify({ name, embeddingConfig: { model: "text-embedding-3-small" } }),
+      body: JSON.stringify({ name, embeddingConfig: { model: "gemini-embedding-001" } }),
     }),
   uploadIntent: (projectId: string, datasetId: string, originalName: string, mediaType: string, sizeBytes: number) =>
     apiJson<UploadIntent>(`/api/v1/projects/${projectId}/datasets/${datasetId}/documents/uploads`, {

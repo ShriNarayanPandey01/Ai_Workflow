@@ -73,6 +73,7 @@ async def test_retrieve_isolates_projects() -> None:
     assert isinstance(chunks, list)
     assert len(chunks) == 1
     assert chunks[0]["text"] == "project A secret"
+    assert embedder.calls[-1].task_type == "RETRIEVAL_QUERY"
 
 
 @pytest.mark.asyncio

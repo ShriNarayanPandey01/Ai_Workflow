@@ -66,7 +66,7 @@ The **AI Workflow Platform** enables authenticated users to visually compose, va
 
 | Supported MVP Capabilities | Explicit MVP Non-Goals |
 |---|---|
-| • Visual DAG canvas with React Flow<br/>• Drafts & immutable published version pinning<br/>• Manual, Webhook, and Scheduled triggers<br/>• Conditional branches & bounded loops (`maxIterations`)<br/>• Hybrid wiring (edges + field-level input bindings)<br/>• OpenAI-compatible LLM chat & embeddings<br/>• Project-scoped document RAG via pgvector<br/>• Human approval/review durable pause & resume<br/>• Hardened outbound HTTP actions with SSRF filters<br/>• Durable heavy-task jobs (screening, research, cleanup)<br/>• Live SSE run tracing and checkpoint restart recovery | • Arbitrary user code execution (`eval`, Python scripts)<br/>• Runtime loading of untrusted binary/Python plug-ins<br/>• Public node marketplace<br/>• Real-time collaborative canvas editing<br/>• Billing, meter charging, or multi-tenant SaaS orgs<br/>• Enterprise SAML / OIDC federation (Argon2 / JWT used for MVP)<br/>• Automated brokerage trading or financial execution<br/>• Unrestricted host filesystem/cloud cleanup operations |
+| • Visual DAG canvas with React Flow<br/>• Drafts & immutable published version pinning<br/>• Manual, Webhook, and Scheduled triggers<br/>• Conditional branches & bounded loops (`maxIterations`)<br/>• Hybrid wiring (edges + field-level input bindings)<br/>• Baseten Muse Spark chat & Gemini embeddings<br/>• Project-scoped document RAG via pgvector<br/>• Human approval/review durable pause & resume<br/>• Hardened outbound HTTP actions with SSRF filters<br/>• Durable heavy-task jobs (screening, research, cleanup)<br/>• Live SSE run tracing and checkpoint restart recovery | • Arbitrary user code execution (`eval`, Python scripts)<br/>• Runtime loading of untrusted binary/Python plug-ins<br/>• Public node marketplace<br/>• Real-time collaborative canvas editing<br/>• Billing, meter charging, or multi-tenant SaaS orgs<br/>• Enterprise SAML / OIDC federation (Argon2 / JWT used for MVP)<br/>• Automated brokerage trading or financial execution<br/>• Unrestricted host filesystem/cloud cleanup operations |
 
 ---
 
@@ -118,7 +118,7 @@ flowchart TB
 | **Control Plane** | Java 21 + Spring Boot | Public REST API, Identity, Workspaces/Projects, Workflow Drafts, Immutable Versions, Catalog Manifests, Credentials (encrypted), Triggers (Quartz), Outbox Publisher, SSE Run Projector, Approvals. | Graph walking, LLM calls, vector math, task execution. |
 | **Execution Worker** | Python 3.12+ (Async) | Inbox idempotency, DAG walker runtime, step checkpoints, lease mutex, node executors, task command dispatch, run outcome events. | Public HTTP, user auth, platform user tables, document ingest. |
 | **Task Worker** | Python 3.12+ (Async) | Long-running durable jobs (research, momentum screening, cleanup), per-item checkpoints, progress reporting, artifact generation. | Parent DAG orchestration, public APIs. |
-| **RAG Worker** | Python 3.12+ (Async) | Document download, parsing, chunking, OpenAI embeddings, `rag.*` vector storage, ingestion events. | Workflow graph execution, browser APIs. |
+| **RAG Worker** | Python 3.12+ (Async) | Document download, parsing, chunking, Gemini embeddings, `rag.*` vector storage, ingestion events. | Workflow graph execution, browser APIs. |
 | **Execution API** | FastAPI + Uvicorn | Liveness (`/health`) and readiness (`/ready`) probes for container orchestration. | Workflow execution over HTTP. |
 
 ---

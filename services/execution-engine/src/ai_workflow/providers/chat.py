@@ -85,7 +85,7 @@ class OpenAICompatibleChatProvider:
         self,
         *,
         api_key: str,
-        base_url: str = "https://api.openai.com/v1",
+        base_url: str = "https://inference.baseten.co/v1",
         client: httpx.AsyncClient | None = None,
         max_attempts: int = 3,
         initial_backoff_ms: int = 250,
@@ -185,9 +185,9 @@ def build_chat_provider(
     *,
     fake_llm: bool = False,
     api_key: str | None = None,
-    base_url: str = "https://api.openai.com/v1",
+    base_url: str = "https://inference.baseten.co/v1",
 ) -> ChatProvider:
-    """Select Fake or OpenAI-compatible provider from runtime flags."""
+    """Select Fake or Baseten's OpenAI-compatible chat provider."""
     if fake_llm or not api_key:
         return FakeChatProvider()
     return OpenAICompatibleChatProvider(api_key=api_key, base_url=base_url)

@@ -88,7 +88,7 @@ Live e2e (control-plane mimic over real Postgres + RabbitMQ; workers run in-proc
 docker compose up -d postgres rabbitmq
 docker compose stop execution-worker task-worker
 cd services/execution-engine
-# Requires OPENAI_API_KEY in .env (script forces AIW_FAKE_LLM=false)
+# Requires BASETEN_API_KEY in .env (script forces AIW_FAKE_LLM=false)
 uv run python scripts/trigger_full_features_workflow.py
 uv run python scripts/trigger_combo_workflow.py
 ```

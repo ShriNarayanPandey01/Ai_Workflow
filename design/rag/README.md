@@ -10,7 +10,8 @@
 The **RAG Service** (`rag-worker`) owns asynchronous document ingestion and deletion:
 1. **Download:** Fetches uploaded source files from MinIO via short-lived download intents.
 2. **Extraction & Chunking:** Extracts text (PDF, text, markdown) and splits into semantic chunks with overlap.
-3. **Embeddings:** Generates vector embeddings via OpenAI-compatible embedding models (`text-embedding-3-small` / `large`).
+3. **Embeddings:** Generates document and retrieval-query vectors with Gemini `gemini-embedding-001` (1536 dimensions, retrieval task types).
+   Existing chunks created with another model must be re-ingested; same-sized vectors from different models are not compatible.
 4. **Vector Storage:** Persists document metadata and embeddings into the dedicated `rag` PostgreSQL schema.
 5. **Lifecycle Events:** Publishes `document.ingestion.started`, `document.ingestion.completed`, and `document.ingestion.failed` events to `aiw.events.v1`.
 

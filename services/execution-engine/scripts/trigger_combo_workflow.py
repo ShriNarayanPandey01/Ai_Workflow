@@ -12,7 +12,7 @@ Prerequisites (from repo root):
     docker compose up -d postgres rabbitmq
     docker compose stop execution-worker task-worker
 
-Requires OPENAI_API_KEY in services/execution-engine/.env (AIW_FAKE_LLM must
+Requires BASETEN_API_KEY in services/execution-engine/.env (AIW_FAKE_LLM must
 not be true).
 
 Usage:
@@ -70,12 +70,13 @@ DEFAULT_INPUT = {
 }
 
 
-def _prepare_combo_workflow() -> dict[str, Any]:
+def _prepare_combo_workflow(*, chat_model: str) -> dict[str, Any]:
     """Load combo fixture and point HTTP + chat credentials at a live path."""
     return prepare_live_workflow(
         load_json(COMBO_FIXTURE),
         http_node_id=HTTP_NODE_ID,
         chat_node_id=CHAT_NODE_ID,
+        chat_model=chat_model,
     )
 
 
@@ -86,7 +87,7 @@ async def _run_high_score_path(
     topic: str,
     items: list[str],
 ) -> int:
-    workflow = _prepare_combo_workflow()
+    workflow = _prepare_combo_workflow(chat_model=runtime.settings.chat_model)
     run_input = {"topic": topic, "score": score, "items": items}
     envelope, run_id = build_start_envelope(workflow, run_input=run_input)
     workflow_id = workflow["workflow_id"]
@@ -183,7 +184,7 @@ async def _run_low_score_path(
     topic: str,
     items: list[str],
 ) -> int:
-    workflow = _prepare_combo_workflow()
+    workflow = _prepare_combo_workflow(chat_model=runtime.settings.chat_model)
     run_input = {"topic": topic, "score": 0.1, "items": items}
     envelope, run_id = build_start_envelope(workflow, run_input=run_input)
 

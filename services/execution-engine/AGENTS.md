@@ -43,7 +43,7 @@ src/ai_workflow/
 ├── contracts/     # Pydantic v2 models generated from /contracts schemas
 ├── messaging/     # RabbitMQ topology, envelope codecs, publisher, consumer inbox
 ├── nodes/         # Node executors (action, ai, control, human, rag)
-├── providers/     # OpenAI-compatible LLM & embedding clients
+├── providers/     # Baseten OpenAI-compatible chat and Gemini embedding clients
 ├── rag/           # In-process vector retrieval against rag.* schema
 ├── runtime/       # Custom DAG walker, IR cache, state, bindings, validator, checkpointer, leases
 ├── security/      # Service auth tokens, SSRF validator, recursive redaction

@@ -30,7 +30,7 @@ design/
 | 📋 **[control-plane/FEATURES.md](./control-plane/FEATURES.md)** | **Control Plane Acceptance Criteria:** Feature-by-feature acceptance criteria and test invariants for the control plane. | Java Engineers & QA |
 | 🐍 **[execution-engine/LLD.md](./execution-engine/LLD.md)** | **Execution Engine Low-Level Design:** Python 3.12+ custom DAG walker, `ee.workflow_checkpoints` state machine, distributed run leases, 6-pass semantic validator, durable task workers, and SSRF filtering. | Backend (Python) Engineers |
 | 📋 **[execution-engine/FEATURES.md](./execution-engine/FEATURES.md)** | **Execution Engine Acceptance Criteria:** Feature-by-feature acceptance criteria and test invariants for the execution plane. | Python Engineers & QA |
-| 🔍 **[rag/README.md](./rag/README.md)** | **RAG Service Design:** Ingestion pipeline (`rag-worker`), text extraction, chunking, OpenAI embeddings, and `rag.*` pgvector storage. | Python / AI Engineers |
+| 🔍 **[rag/README.md](./rag/README.md)** | **RAG Service Design:** Ingestion pipeline (`rag-worker`), text extraction, chunking, Gemini embeddings, and `rag.*` pgvector storage. | Python / AI Engineers |
 | 📜 **[`contracts/`](../contracts/)** | **Canonical JSON Schemas:** Single source of truth for workflow definitions, node manifests, broker commands, and event payloads. | All Engineers |
 
 ---
