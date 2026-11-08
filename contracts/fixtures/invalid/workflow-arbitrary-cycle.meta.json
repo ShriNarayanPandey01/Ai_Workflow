@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-arbitrary-cycle.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["ARBITRARY_CYCLE"],
+    "notes": "Cycle between two prompt nodes without an owning control.loop@1 node."
+  }
+}

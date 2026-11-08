@@ -1,0 +1,10 @@
+{
+  "fixture": "envelope-missing-message-id.json",
+  "schema": "messages/envelope.schema.json",
+  "expects": {
+    "json_schema_valid": false,
+    "semantic_valid": false,
+    "error_codes": ["ENVELOPE_MESSAGE_ID_REQUIRED"],
+    "notes": "message_id is required for idempotent consumption."
+  }
+}

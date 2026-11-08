@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-unbounded-loop.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["LOOP_UNBOUNDED", "NODE_CONFIG_INVALID"],
+    "notes": "control.loop@1 config omits required max_iterations. Rejected by manifest config validation / semantic loop rules."
+  }
+}

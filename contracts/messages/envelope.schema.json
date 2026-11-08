@@ -1,0 +1,579 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/messages/envelope.schema.json",
+  "title": "MessageEnvelope",
+  "description": "Shared RabbitMQ command/event envelope. Snake_case. No secrets in any field.",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "nullableUuid": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/uuid" }
+      ]
+    },
+    "tenant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspace_id", "project_id"],
+      "properties": {
+        "workspace_id": { "$ref": "#/$defs/uuid" },
+        "project_id": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "executionSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow_id", "run_id"],
+      "properties": {
+        "workflow_id": { "$ref": "#/$defs/uuid" },
+        "workflow_version_id": { "$ref": "#/$defs/nullableUuid" },
+        "run_id": { "$ref": "#/$defs/uuid" },
+        "node_id": { "type": "null" },
+        "task_id": { "type": "null" },
+        "document_id": { "type": "null" }
+      }
+    },
+    "nodeSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow_id", "run_id", "node_id"],
+      "properties": {
+        "workflow_id": { "$ref": "#/$defs/uuid" },
+        "workflow_version_id": { "$ref": "#/$defs/nullableUuid" },
+        "run_id": { "$ref": "#/$defs/uuid" },
+        "node_id": { "$ref": "#/$defs/uuid" },
+        "task_id": { "type": "null" },
+        "document_id": { "type": "null" }
+      }
+    },
+    "taskSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow_id", "run_id", "node_id", "task_id"],
+      "properties": {
+        "workflow_id": { "$ref": "#/$defs/uuid" },
+        "workflow_version_id": { "$ref": "#/$defs/nullableUuid" },
+        "run_id": { "$ref": "#/$defs/uuid" },
+        "node_id": { "$ref": "#/$defs/uuid" },
+        "task_id": { "$ref": "#/$defs/uuid" },
+        "document_id": { "type": "null" }
+      }
+    },
+    "documentSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id"],
+      "properties": {
+        "workflow_id": { "type": "null" },
+        "workflow_version_id": { "type": "null" },
+        "run_id": { "type": "null" },
+        "node_id": { "type": "null" },
+        "task_id": { "type": "null" },
+        "document_id": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "messageType": {
+      "type": "string",
+      "enum": [
+        "execution.start",
+        "execution.cancel",
+        "execution.resume",
+        "execution.pause",
+        "execution.unpause",
+        "document.ingest",
+        "document.delete",
+        "task.start",
+        "task.cancel",
+        "execution.queued",
+        "execution.started",
+        "execution.waiting",
+        "execution.paused",
+        "execution.unpaused",
+        "execution.completed",
+        "execution.failed",
+        "execution.cancelled",
+        "node.started",
+        "node.completed",
+        "node.failed",
+        "document.ingestion.started",
+        "document.ingestion.completed",
+        "document.ingestion.failed",
+        "task.progress",
+        "task.item.completed",
+        "task.completed",
+        "task.failed"
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message_id",
+    "message_type",
+    "schema_version",
+    "occurred_at",
+    "correlation_id",
+    "idempotency_key",
+    "tenant",
+    "subject",
+    "sequence",
+    "payload"
+  ],
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique delivery id used for consumer deduplication."
+    },
+    "message_type": { "$ref": "#/$defs/messageType" },
+    "schema_version": { "type": "string", "const": "1.0" },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Usually the run_id for execution-related messages or the document_id for standalone document flows."
+    },
+    "causation_id": { "$ref": "#/$defs/nullableUuid" },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "tenant": { "$ref": "#/$defs/tenant" },
+    "subject": {
+      "type": "object",
+      "description": "Message subject. Exact required identifiers depend on message_type."
+    },
+    "sequence": {
+      "description": "Commands carry null. Events carry a monotonic per-run or per-document sequence starting at 1.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "integer", "minimum": 1 }
+      ]
+    },
+    "payload": {
+      "description": "Message-type-specific payload."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.start" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "properties": { "mode": { "const": "published" } },
+                  "required": ["mode"]
+                }
+              },
+              "required": ["payload"]
+            },
+            "then": {
+              "properties": {
+                "subject": {
+                  "type": "object",
+                  "properties": {
+                    "workflow_version_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": ["workflow_version_id"]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "properties": { "mode": { "const": "draft" } },
+                  "required": ["mode"]
+                }
+              },
+              "required": ["payload"]
+            },
+            "then": {
+              "properties": {
+                "subject": {
+                  "type": "object",
+                  "properties": {
+                    "workflow_version_id": { "type": "null" }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/execution.start.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.cancel" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/execution.cancel.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.resume" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/execution.resume.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.pause" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/execution.pause.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.unpause" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/execution.unpause.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "document.ingest" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/documentSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/document.ingest.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "document.delete" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/documentSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/document.delete.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "task.start" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/taskSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/task.start.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "task.cancel" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/taskSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/task.cancel.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.queued" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": {
+            "$ref": "events/execution.lifecycle.schema.json#/$defs/executionQueued"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.started" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": {
+            "$ref": "events/execution.lifecycle.schema.json#/$defs/executionStarted"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.waiting" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": {
+            "$ref": "events/execution.lifecycle.schema.json#/$defs/executionWaiting"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.paused" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/execution.lifecycle.schema.json#/$defs/executionPaused" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.unpaused" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/execution.lifecycle.schema.json#/$defs/executionUnpaused" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.completed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": {
+            "$ref": "events/execution.lifecycle.schema.json#/$defs/executionCompleted"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.failed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": {
+            "$ref": "events/execution.lifecycle.schema.json#/$defs/executionFailed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.cancelled" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": {
+            "$ref": "events/execution.lifecycle.schema.json#/$defs/executionCancelled"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "node.started" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/nodeSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/node.lifecycle.schema.json#/$defs/nodeStarted" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "node.completed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/nodeSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/node.lifecycle.schema.json#/$defs/nodeCompleted" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "node.failed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/nodeSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/node.lifecycle.schema.json#/$defs/nodeFailed" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "document.ingestion.started" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/documentSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/document.ingestion.schema.json#/$defs/started" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "document.ingestion.completed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/documentSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/document.ingestion.schema.json#/$defs/completed" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "document.ingestion.failed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/documentSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/document.ingestion.schema.json#/$defs/failed" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "task.progress" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/taskSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/task.lifecycle.schema.json#/$defs/progress" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "task.item.completed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/taskSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/task.lifecycle.schema.json#/$defs/itemCompleted" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "task.completed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/taskSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/task.lifecycle.schema.json#/$defs/completed" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "task.failed" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/taskSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/task.lifecycle.schema.json#/$defs/failed" }
+        }
+      }
+    }
+  ]
+}

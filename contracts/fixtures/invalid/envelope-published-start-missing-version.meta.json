@@ -1,0 +1,10 @@
+{
+  "fixture": "envelope-published-start-missing-version.json",
+  "schema": "messages/envelope.schema.json",
+  "expects": {
+    "json_schema_valid": false,
+    "semantic_valid": false,
+    "error_codes": ["EXECUTION_START_PUBLISHED_VERSION_REQUIRED"],
+    "notes": "Published execution.start messages must carry a concrete workflow_version_id in the embedded definition."
+  }
+}

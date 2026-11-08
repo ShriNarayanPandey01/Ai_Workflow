@@ -1,0 +1,33 @@
+{
+  "message_id": "33333333-3333-4333-8333-333333333302",
+  "message_type": "execution.completed",
+  "schema_version": "1.0",
+  "occurred_at": "2026-07-24T12:45:12Z",
+  "correlation_id": "44444444-4444-4444-8444-444444444401",
+  "causation_id": "33333333-3333-4333-8333-333333333301",
+  "idempotency_key": "event:44444444-4444-4444-8444-444444444401:3",
+  "tenant": {
+    "workspace_id": "55555555-5555-4555-8555-555555555501",
+    "project_id": "66666666-6666-4666-8666-666666666601"
+  },
+  "subject": {
+    "workflow_id": "11111111-1111-4111-8111-111111111101",
+    "workflow_version_id": "22222222-2222-4222-8222-222222222201",
+    "run_id": "44444444-4444-4444-8444-444444444401"
+  },
+  "sequence": 3,
+  "payload": {
+    "status": "SUCCEEDED",
+    "outputs": {
+      "order_id": "order-1042",
+      "priority": "high"
+    },
+    "token_usage": {
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "total_tokens": 0
+    },
+    "estimated_cost": 0,
+    "finished_at": "2026-07-24T12:45:12Z"
+  }
+}

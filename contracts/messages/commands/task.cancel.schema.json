@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/messages/commands/task.cancel.schema.json",
+  "title": "TaskCancelPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "reason"],
+  "properties": {
+    "task_id": { "type": "string", "format": "uuid" },
+    "reason": {
+      "type": "string",
+      "enum": ["user_requested", "parent_cancelled", "timeout", "system"]
+    }
+  }
+}

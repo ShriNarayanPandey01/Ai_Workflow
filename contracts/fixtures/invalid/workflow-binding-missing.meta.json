@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-binding-missing.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["BINDING_MISSING"],
+    "notes": "Explicit empty input_bindings disables pass-through inference on required output port."
+  }
+}

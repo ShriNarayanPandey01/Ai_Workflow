@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/messages/commands/task.start.schema.json",
+  "title": "TaskStartPayload",
+  "description": "Dispatch a durable heavy task. Credentials remain references only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "task_type", "node_id", "payload", "budgets"],
+  "properties": {
+    "task_id": { "type": "string", "format": "uuid" },
+    "task_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+@[1-9][0-9]*$",
+      "maxLength": 128
+    },
+    "node_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "credential_refs": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "format": "uuid" }
+    },
+    "resource_refs": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "format": "uuid" }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_seconds",
+        "max_items",
+        "max_provider_calls",
+        "max_artifact_bytes"
+      ],
+      "properties": {
+        "max_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+        "max_items": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "max_provider_calls": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "max_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "max_estimated_cost": { "type": ["number", "null"], "minimum": 0 },
+        "max_artifact_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1073741824
+        }
+      }
+    }
+  }
+}

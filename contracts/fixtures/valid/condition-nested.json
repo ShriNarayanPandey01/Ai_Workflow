@@ -1,0 +1,32 @@
+{
+  "op": "all",
+  "args": [
+    {
+      "op": "gte",
+      "left": { "kind": "path", "value": "/score" },
+      "right": { "kind": "literal", "value": 0.5 }
+    },
+    {
+      "op": "any",
+      "args": [
+        {
+          "op": "eq",
+          "left": { "kind": "path", "value": "/status" },
+          "right": { "kind": "literal", "value": "ready" }
+        },
+        {
+          "op": "contains",
+          "left": { "kind": "path", "value": "/tags" },
+          "right": { "kind": "literal", "value": "priority" }
+        }
+      ]
+    },
+    {
+      "op": "not",
+      "arg": {
+        "op": "isNull",
+        "value": { "kind": "path", "value": "/customer_id" }
+      }
+    }
+  ]
+}

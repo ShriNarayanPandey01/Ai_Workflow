@@ -1,0 +1,121 @@
+{
+  "type": "action.http-request@1",
+  "display_name": "HTTP Request",
+  "description": "Invokes an approved outbound HTTP or HTTPS request with bounded input, response, redirects, and idempotency controls.",
+  "category": "action",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "url_variables",
+      "direction": "input",
+      "required": false,
+      "cardinality": "optional",
+      "schema": { "type": "object" }
+    },
+    {
+      "name": "headers",
+      "direction": "input",
+      "required": false,
+      "cardinality": "optional",
+      "schema": { "type": "object" }
+    },
+    {
+      "name": "query",
+      "direction": "input",
+      "required": false,
+      "cardinality": "optional",
+      "schema": { "type": "object" }
+    },
+    {
+      "name": "body",
+      "direction": "input",
+      "required": false,
+      "cardinality": "optional",
+      "schema": { "type": "object" }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "response",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["status_code"],
+        "properties": {
+          "status_code": { "type": "integer", "minimum": 100, "maximum": 599 },
+          "headers": { "type": "object" },
+          "body": {},
+          "body_text": { "type": ["string", "null"] }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["method", "url_template", "timeout_seconds", "max_response_bytes", "max_redirects"],
+    "properties": {
+      "method": {
+        "type": "string",
+        "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+      },
+      "url_template": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "header_allowlist": {
+        "type": "array",
+        "maxItems": 64,
+        "items": { "type": "string", "maxLength": 128 }
+      },
+      "timeout_seconds": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 300
+      },
+      "max_response_bytes": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10485760
+      },
+      "max_redirects": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 10
+      },
+      "idempotency_header": {
+        "type": ["string", "null"],
+        "maxLength": 128
+      }
+    }
+  },
+  "credential_slots": [
+    {
+      "name": "header_auth",
+      "credential_type": "http_header_auth",
+      "required": false
+    },
+    {
+      "name": "query_auth",
+      "credential_type": "http_query_auth",
+      "required": false
+    }
+  ],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": true,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "globe",
+    "color_token": "action",
+    "inspector": "http-request"
+  }
+}

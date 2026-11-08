@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/nodes/manifest.schema.json",
+  "title": "NodeManifest",
+  "description": "Versioned node type metadata for palette, validation, and executor registration.",
+  "$defs": {
+    "jsonSchemaObject": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "portDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "direction", "required", "cardinality", "schema"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9_]*$",
+          "maxLength": 64
+        },
+        "direction": { "type": "string", "enum": ["input", "output"] },
+        "required": { "type": "boolean" },
+        "cardinality": {
+          "type": "string",
+          "enum": ["single", "optional", "multiple"]
+        },
+        "schema": { "$ref": "#/$defs/jsonSchemaObject" },
+        "description": { "type": "string", "maxLength": 1024 },
+        "default_bindings": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/defaultBinding" }
+        }
+      }
+    },
+    "defaultBindingMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_ports", "source_paths"],
+      "properties": {
+        "source_ports": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "type": "string", "maxLength": 64 }
+        },
+        "source_paths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "type": "string", "maxLength": 256 }
+        }
+      }
+    },
+    "defaultBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_path", "match"],
+      "properties": {
+        "target_path": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "match": { "$ref": "#/$defs/defaultBindingMatch" }
+      }
+    },
+    "inputPortDefinition": {
+      "allOf": [
+        { "$ref": "#/$defs/portDefinition" },
+        {
+          "type": "object",
+          "properties": {
+            "direction": { "const": "input" }
+          }
+        }
+      ]
+    },
+    "outputPortDefinition": {
+      "allOf": [
+        { "$ref": "#/$defs/portDefinition" },
+        {
+          "type": "object",
+          "properties": {
+            "direction": { "const": "output" }
+          }
+        }
+      ]
+    },
+    "credentialSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "credential_type", "required"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9_]*$",
+          "maxLength": 64
+        },
+        "credential_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "required": { "type": "boolean" },
+        "description": { "type": "string", "maxLength": 1024 }
+      }
+    },
+    "resourceSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "resource_type", "required"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9_]*$",
+          "maxLength": 64
+        },
+        "resource_type": {
+          "type": "string",
+          "enum": ["dataset", "watchlist", "artifact_collection", "other"]
+        },
+        "required": { "type": "boolean" },
+        "description": { "type": "string", "maxLength": 1024 }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "display_name",
+    "description",
+    "category",
+    "execution_owner",
+    "inputs",
+    "outputs",
+    "config_schema",
+    "credential_slots",
+    "resource_slots",
+    "capabilities",
+    "ui"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)+@[1-9][0-9]*$",
+      "maxLength": 128
+    },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "description": { "type": "string", "minLength": 1, "maxLength": 2048 },
+    "category": {
+      "type": "string",
+      "enum": ["trigger", "data", "control", "ai", "rag", "human", "action", "market", "research"]
+    },
+    "execution_owner": {
+      "type": "string",
+      "enum": ["control-plane", "execution-engine"]
+    },
+    "inputs": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/inputPortDefinition" }
+    },
+    "outputs": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/outputPortDefinition" }
+    },
+    "config_schema": { "$ref": "#/$defs/jsonSchemaObject" },
+    "credential_slots": {
+      "type": "array",
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/credentialSlot" }
+    },
+    "resource_slots": {
+      "type": "array",
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/resourceSlot" }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retryable",
+        "cancellable",
+        "side_effecting",
+        "execution_mode",
+        "emits_progress",
+        "resumable"
+      ],
+      "properties": {
+        "retryable": { "type": "boolean" },
+        "cancellable": { "type": "boolean" },
+        "side_effecting": { "type": "boolean" },
+        "execution_mode": {
+          "type": "string",
+          "enum": ["inline", "durable-task"]
+        },
+        "emits_progress": { "type": "boolean" },
+        "resumable": { "type": "boolean" }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["icon", "color_token"],
+      "properties": {
+        "icon": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "color_token": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "inspector": { "type": ["string", "null"], "maxLength": 64 }
+      }
+    }
+  }
+}

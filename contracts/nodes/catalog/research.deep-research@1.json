@@ -1,0 +1,133 @@
+{
+  "type": "research.deep-research@1",
+  "display_name": "Deep Research",
+  "description": "Runs a durable, budgeted research task and returns a cited report artifact with source metadata and warnings.",
+  "category": "research",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "request",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["question"],
+        "properties": {
+          "question": { "type": "string" },
+          "scope": { "type": ["object", "null"] },
+          "seed_sources": { "type": "array" },
+          "required_output_schema": { "type": ["object", "null"] }
+        }
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "report",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["executive_summary", "sources", "completion_reason"],
+        "properties": {
+          "artifact_ref": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "executive_summary": { "type": "string" },
+          "sources": { "type": "array" },
+          "citation_coverage": { "type": ["number", "null"] },
+          "unsupported_claim_warnings": { "type": "array" },
+          "usage": { "type": "object" },
+          "completion_reason": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["max_sources", "depth", "max_elapsed_seconds", "max_provider_calls", "report_format"],
+    "properties": {
+      "allowed_domains": {
+        "type": "array",
+        "maxItems": 256,
+        "items": { "type": "string", "maxLength": 255 }
+      },
+      "allowed_source_types": {
+        "type": "array",
+        "maxItems": 16,
+        "items": {
+          "type": "string",
+          "enum": ["web", "news", "paper", "dataset", "internal_corpus"]
+        }
+      },
+      "max_sources": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000
+      },
+      "depth": {
+        "type": "string",
+        "enum": ["shallow", "standard", "deep"]
+      },
+      "max_elapsed_seconds": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 86400
+      },
+      "max_tokens": {
+        "type": ["integer", "null"],
+        "minimum": 0
+      },
+      "max_provider_calls": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100000
+      },
+      "max_estimated_cost": {
+        "type": ["number", "null"],
+        "minimum": 0
+      },
+      "report_format": {
+        "type": "string",
+        "enum": ["markdown", "json"]
+      }
+    }
+  },
+  "credential_slots": [
+    {
+      "name": "search_provider",
+      "credential_type": "search_provider",
+      "required": true
+    },
+    {
+      "name": "model_provider",
+      "credential_type": "openai_compatible",
+      "required": true
+    }
+  ],
+  "resource_slots": [
+    {
+      "name": "project_corpus",
+      "resource_type": "dataset",
+      "required": false,
+      "description": "Optional authorized internal corpus."
+    }
+  ],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "durable-task",
+    "emits_progress": true,
+    "resumable": true
+  },
+  "ui": {
+    "icon": "book-open",
+    "color_token": "research",
+    "inspector": "deep-research"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "type": "research.deep-research@1",
+  "display_name": "Deep Research",
+  "description": "Runs a durable, budgeted research task.",
+  "category": "research",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "request",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["question"],
+        "properties": {
+          "question": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "report",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["executive_summary", "sources", "completion_reason"],
+        "properties": {
+          "executive_summary": { "type": "string" },
+          "sources": { "type": "array" },
+          "completion_reason": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "required": ["max_sources", "depth", "max_elapsed_seconds", "max_provider_calls", "report_format"],
+    "properties": {
+      "max_sources": { "type": "integer", "minimum": 1 },
+      "depth": { "type": "string", "enum": ["shallow", "standard", "deep"] },
+      "max_elapsed_seconds": { "type": "integer", "minimum": 1 },
+      "max_provider_calls": { "type": "integer", "minimum": 0 },
+      "report_format": { "type": "string", "enum": ["markdown", "json"] }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "durable-task",
+    "emits_progress": true,
+    "resumable": true
+  },
+  "ui": {
+    "icon": "book-open",
+    "color_token": "research",
+    "inspector": null
+  }
+}

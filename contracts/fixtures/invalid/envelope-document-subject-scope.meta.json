@@ -1,0 +1,10 @@
+{
+  "fixture": "envelope-document-subject-scope.json",
+  "schema": "messages/envelope.schema.json",
+  "expects": {
+    "json_schema_valid": false,
+    "semantic_valid": false,
+    "error_codes": ["ENVELOPE_SUBJECT_SCOPE_INVALID"],
+    "notes": "Standalone document commands must not reuse workflow/run subject identifiers."
+  }
+}

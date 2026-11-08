@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-invalid-port.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["PORT_UNKNOWN", "PORT_INCOMPATIBLE"],
+    "notes": "source_port not_a_real_port is not declared by data.input@1."
+  }
+}

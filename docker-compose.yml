@@ -1,0 +1,248 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: aiw
+      POSTGRES_USER: aiw
+      POSTGRES_PASSWORD: aiw
+    ports:
+      - "5432:5432"
+    volumes:
+      - aiw-postgres:/var/lib/postgresql/data
+      - ./services/execution-engine/sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiw -d aiw"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: aiw
+      RABBITMQ_DEFAULT_PASS: aiw
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: services/control-plane/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/aiw
+      AIW_DATABASE_USERNAME: aiw
+      AIW_DATABASE_PASSWORD: aiw
+      AIW_JWT_SECRET: ${AIW_JWT_SECRET:-development-only-jwt-secret-must-be-at-least-32-bytes}
+      AIW_REFRESH_HASH_SECRET: ${AIW_REFRESH_HASH_SECRET:-development-only-refresh-hash-secret}
+      AIW_REFRESH_COOKIE_SECURE: ${AIW_REFRESH_COOKIE_SECURE:-false}
+      AIW_CONTRACTS_ROOT: /contracts
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: "5672"
+      SPRING_RABBITMQ_USERNAME: aiw
+      SPRING_RABBITMQ_PASSWORD: aiw
+      AIW_CREDENTIAL_KEK: ${AIW_CREDENTIAL_KEK:-development-only-credential-kek-must-be-32b}
+      AIW_SERVICE_JWT_SECRET: ${AIW_SERVICE_JWT_SECRET:-development-only-jwt-secret-must-be-at-least-32-bytes}
+      AIW_S3_ENABLED: "true"
+      AIW_S3_ENDPOINT: http://minio:9000
+      AIW_S3_BUCKET: aiw
+      AIW_S3_ACCESS_KEY: aiw
+      AIW_S3_SECRET_KEY: aiwsecret
+      AIW_S3_REGION: us-east-1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./contracts:/contracts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  execution-worker:
+    build:
+      context: ./services/execution-engine
+    environment:
+      AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
+      AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
+      AIW_SERVICE_ROLE: execution-worker
+      AIW_CONTRACTS_ROOT: /contracts
+      AIW_FAKE_LLM: ${AIW_FAKE_LLM:-false}
+      AIW_FAKE_IMAGE: ${AIW_FAKE_IMAGE:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ZENMUX_API_KEY: ${ZENMUX_API_KEY:-}
+      ZENMUSK_API_KEY: ${ZENMUSK_API_KEY:-}
+      AIW_CHAT_BASE_URL: ${AIW_CHAT_BASE_URL:-https://zenmux.ai/api/v1}
+      AIW_DEEPSEEK_API_KEY: ${AIW_DEEPSEEK_API_KEY:-}
+      AIW_CHAT_ROUTING_PROVIDER: ${AIW_CHAT_ROUTING_PROVIDER:-zenmux}
+      AIW_CHAT_MODEL: ${AIW_CHAT_MODEL:-deepseek/deepseek-v4-pro}
+      AIW_IMAGE_GENERATION_MODEL: ${AIW_IMAGE_GENERATION_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      AIW_FAKE_EMBEDDINGS: ${AIW_FAKE_EMBEDDINGS:-false}
+      AIW_EMBEDDING_MODEL: ${AIW_EMBEDDING_MODEL:-gemini-embedding-001}
+      AIW_EMBEDDING_DIMENSIONS: ${AIW_EMBEDDING_DIMENSIONS:-1536}
+      AIW_GEMINI_TEXT_MODEL: ${AIW_GEMINI_TEXT_MODEL:-gemini-3.5-flash}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AIW_ANTHROPIC_MODEL: ${AIW_ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      AIW_CONTROL_PLANE_INTERNAL_URL: ${AIW_CONTROL_PLANE_INTERNAL_URL:-http://control-plane:8080}
+      AIW_INTERNAL_AUTH_TOKEN: ${AIW_INTERNAL_AUTH_TOKEN:-development-only-jwt-secret-must-be-at-least-32-bytes}
+      AIW_ARTIFACT_DIR: /app/artifacts
+    volumes:
+      - ./services/execution-engine/src:/app/src:ro
+      - ./services/execution-engine/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
+      - ./services/execution-engine/artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: ["python", "-m", "ai_workflow.worker.execution_worker"]
+
+  task-worker:
+    build:
+      context: ./services/execution-engine
+    environment:
+      AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
+      AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
+      AIW_SERVICE_ROLE: task-worker
+      AIW_CONTRACTS_ROOT: /contracts
+      AIW_FAKE_LLM: ${AIW_FAKE_LLM:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ZENMUX_API_KEY: ${ZENMUX_API_KEY:-}
+      ZENMUSK_API_KEY: ${ZENMUSK_API_KEY:-}
+      AIW_CHAT_BASE_URL: ${AIW_CHAT_BASE_URL:-https://zenmux.ai/api/v1}
+      AIW_CHAT_ROUTING_PROVIDER: ${AIW_CHAT_ROUTING_PROVIDER:-zenmux}
+      AIW_CHAT_MODEL: ${AIW_CHAT_MODEL:-deepseek/deepseek-v4-pro}
+      AIW_IMAGE_GENERATION_MODEL: ${AIW_IMAGE_GENERATION_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AIW_EMBEDDING_MODEL: ${AIW_EMBEDDING_MODEL:-gemini-embedding-001}
+      AIW_EMBEDDING_DIMENSIONS: ${AIW_EMBEDDING_DIMENSIONS:-1536}
+      AIW_ARTIFACT_DIR: /app/artifacts
+    volumes:
+      - ./services/execution-engine/src:/app/src:ro
+      - ./services/execution-engine/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
+      - ./services/execution-engine/artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: ["python", "-m", "ai_workflow.worker.task_worker"]
+
+  execution-api:
+    build:
+      context: ./services/execution-engine
+    environment:
+      AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
+      AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
+      AIW_SERVICE_ROLE: execution-api
+      AIW_CONTRACTS_ROOT: /contracts
+    volumes:
+      - ./services/execution-engine/src:/app/src:ro
+      - ./services/execution-engine/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
+    ports:
+      - "8088:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: ["uvicorn", "ai_workflow.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
+
+  rag-worker:
+    build:
+      context: ./services/rag
+    environment:
+      AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
+      AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
+      AIW_SERVICE_ROLE: rag-worker
+      AIW_CONTRACTS_ROOT: /contracts
+      AIW_FAKE_EMBEDDINGS: ${AIW_FAKE_EMBEDDINGS:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AIW_EMBEDDING_MODEL: ${AIW_EMBEDDING_MODEL:-gemini-embedding-001}
+      AIW_EMBEDDING_DIMENSIONS: ${AIW_EMBEDDING_DIMENSIONS:-1536}
+      AIW_CONTROL_PLANE_INTERNAL_URL: ${AIW_CONTROL_PLANE_INTERNAL_URL:-}
+      AIW_INTERNAL_AUTH_TOKEN: ${AIW_INTERNAL_AUTH_TOKEN:-}
+    volumes:
+      - ./services/rag/src:/app/src:ro
+      - ./services/rag/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: ["python", "-m", "ai_workflow_rag.worker.ingestion_worker"]
+
+  rag-api:
+    build:
+      context: ./services/rag
+    environment:
+      AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
+      AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
+      AIW_SERVICE_ROLE: rag-api
+      AIW_CONTRACTS_ROOT: /contracts
+    volumes:
+      - ./services/rag/src:/app/src:ro
+      - ./services/rag/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
+    ports:
+      - "8089:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: ["uvicorn", "ai_workflow_rag.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: aiw
+      MINIO_ROOT_PASSWORD: aiwsecret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - aiw-minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until mc alias set local http://minio:9000 aiw aiwsecret; do sleep 1; done
+        mc mb -p local/aiw || true
+
+  web:
+    build:
+      context: ./apps/web
+    ports:
+      - "5173:80"
+    depends_on:
+      - control-plane
+
+volumes:
+  aiw-postgres:
+  aiw-minio:

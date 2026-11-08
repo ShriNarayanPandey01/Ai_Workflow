@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/workflow/condition.schema.json",
+  "title": "ConditionExpression",
+  "description": "Safe structured condition AST. No eval, templates, or dynamic code.",
+  "$defs": {
+    "jsonValue": {
+      "title": "JsonValue",
+      "description": "JSON-serializable literal used in conditions.",
+      "type": ["object", "array", "string", "number", "boolean", "null"]
+    },
+    "jsonPointerPath": {
+      "type": "string",
+      "description": "Restricted JSON Pointer into workflow state (must start with /).",
+      "pattern": "^(/([^/~]|~[01])*)+$",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "operand": {
+      "title": "Operand",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "path" },
+            "value": { "$ref": "#/$defs/jsonPointerPath" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "literal" },
+            "value": { "$ref": "#/$defs/jsonValue" }
+          }
+        }
+      ]
+    },
+    "conditionExpression": {
+      "title": "ConditionExpression",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "args"],
+          "properties": {
+            "op": { "type": "string", "enum": ["all", "any"] },
+            "args": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "items": { "$ref": "#/$defs/conditionExpression" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "arg"],
+          "properties": {
+            "op": { "const": "not" },
+            "arg": { "$ref": "#/$defs/conditionExpression" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "left", "right"],
+          "properties": {
+            "op": {
+              "type": "string",
+              "enum": [
+                "eq",
+                "ne",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "contains",
+                "startsWith",
+                "endsWith"
+              ]
+            },
+            "left": { "$ref": "#/$defs/operand" },
+            "right": { "$ref": "#/$defs/operand" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "value"],
+          "properties": {
+            "op": { "type": "string", "enum": ["exists", "isNull"] },
+            "value": { "$ref": "#/$defs/operand" }
+          }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/conditionExpression"
+}

@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-binding-ambiguous.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["BINDING_AMBIGUOUS"],
+    "notes": "Two pass-through edges target the same input port without explicit input_bindings."
+  }
+}

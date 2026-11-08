@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/messages/commands/execution.start.schema.json",
+  "title": "ExecutionStartPayload",
+  "description": "Payload for execution.start. Embeds the immutable definition snapshot selected at enqueue time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["definition", "input", "mode"],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["draft", "published"]
+    },
+    "definition": {
+      "$ref": "../../workflow/definition.schema.json"
+    },
+    "input": {
+      "type": "object",
+      "description": "Validated against definition.input_schema by the control plane before publish."
+    },
+    "draft_revision": {
+      "description": "Present for draft test runs; identifies the revision snapshotted into definition.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "integer", "minimum": 1 }
+      ]
+    },
+    "trigger": {
+      "description": "Optional trigger metadata for audit.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["manual", "webhook", "schedule", "test"]
+            },
+            "trigger_id": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string", "format": "uuid" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "mode": { "const": "published" } },
+        "required": ["mode"]
+      },
+      "then": {
+        "properties": {
+          "draft_revision": { "type": "null" },
+          "definition": {
+            "type": "object",
+            "properties": {
+              "workflow_version_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": ["workflow_version_id"]
+          },
+          "trigger": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["manual", "webhook", "schedule"]
+                  }
+                },
+                "required": ["type"]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "mode": { "const": "draft" } },
+        "required": ["mode"]
+      },
+      "then": {
+        "required": ["draft_revision"],
+        "properties": {
+          "draft_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "definition": {
+            "type": "object",
+            "properties": {
+              "workflow_version_id": { "type": "null" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

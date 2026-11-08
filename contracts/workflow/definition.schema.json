@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/workflow/definition.schema.json",
+  "title": "WorkflowDefinition",
+  "description": "Canonical snake_case workflow definition shared by control plane, execution plane, and fixtures.",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "jsonValue": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    },
+    "metadataObject": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/jsonValue" },
+      "maxProperties": 128
+    },
+    "nodeType": {
+      "type": "string",
+      "description": "Node type in namespace.name@majorVersion form.",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)+@[1-9][0-9]*$",
+      "maxLength": 128
+    },
+    "portName": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "jsonSchemaObject": {
+      "type": "object",
+      "description": "Embedded JSON Schema fragment for workflow input/output. Not fully meta-validated here.",
+      "minProperties": 1
+    },
+    "retryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_attempts", "initial_backoff_ms", "max_backoff_ms", "multiplier"],
+      "properties": {
+        "max_attempts": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "initial_backoff_ms": { "type": "integer", "minimum": 0, "maximum": 600000 },
+        "max_backoff_ms": { "type": "integer", "minimum": 0, "maximum": 3600000 },
+        "multiplier": { "type": "number", "minimum": 1, "maximum": 10 },
+        "jitter": { "type": "boolean", "default": true }
+      }
+    },
+    "executionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeout_seconds",
+        "max_node_executions",
+        "max_parallel_nodes",
+        "max_fan_out_items",
+        "max_task_seconds",
+        "max_provider_calls",
+        "max_artifact_bytes",
+        "default_retry"
+      ],
+      "properties": {
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+        "max_node_executions": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "max_parallel_nodes": { "type": "integer", "minimum": 1, "maximum": 256 },
+        "max_fan_out_items": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "max_task_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+        "max_provider_calls": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "max_artifact_bytes": { "type": "integer", "minimum": 0, "maximum": 1073741824 },
+        "max_estimated_cost": { "type": ["number", "null"], "minimum": 0 },
+        "default_retry": { "$ref": "#/$defs/retryPolicy" }
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "idRefMap": {
+      "type": "object",
+      "description": "Map of slot name to resource/credential UUID. Values must never be secret material.",
+      "additionalProperties": { "$ref": "#/$defs/uuid" },
+      "propertyNames": {
+        "pattern": "^[a-z][a-zA-Z0-9_]*$",
+        "maxLength": 64
+      },
+      "maxProperties": 32
+    },
+    "jsonPointer": {
+      "type": "string",
+      "description": "RFC 6901 JSON Pointer; empty string or / means the entire value.",
+      "pattern": "^(/([^~][^/]*)*)?$"
+    },
+    "bindingOrigin": {
+      "type": "string",
+      "enum": ["user", "default", "pass_through"]
+    },
+    "inputBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_port",
+        "target_path",
+        "source_node_id",
+        "source_port",
+        "source_path",
+        "origin"
+      ],
+      "properties": {
+        "target_port": { "$ref": "#/$defs/portName" },
+        "target_path": { "$ref": "#/$defs/jsonPointer" },
+        "source_node_id": { "$ref": "#/$defs/uuid" },
+        "source_port": { "$ref": "#/$defs/portName" },
+        "source_path": { "$ref": "#/$defs/jsonPointer" },
+        "origin": { "$ref": "#/$defs/bindingOrigin" }
+      }
+    },
+    "workflowNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "position", "config"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "type": { "$ref": "#/$defs/nodeType" },
+        "position": { "$ref": "#/$defs/position" },
+        "config": {
+          "type": "object",
+          "description": "Node configuration. Must not contain credential secret values.",
+          "additionalProperties": true,
+          "maxProperties": 128
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadataObject",
+          "description": "Editor/runtime metadata that does not change node meaning."
+        },
+        "credential_refs": { "$ref": "#/$defs/idRefMap" },
+        "resource_refs": { "$ref": "#/$defs/idRefMap" },
+        "input_bindings": {
+          "type": "array",
+          "description": "Explicit field-level input mappings. When omitted, pass-through is inferred from edges.",
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/inputBinding" }
+        }
+      }
+    },
+    "workflowEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source_node_id",
+        "source_port",
+        "target_node_id",
+        "target_port"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "source_node_id": { "$ref": "#/$defs/uuid" },
+        "source_port": { "$ref": "#/$defs/portName" },
+        "target_node_id": { "$ref": "#/$defs/uuid" },
+        "target_port": { "$ref": "#/$defs/portName" },
+        "label": { "type": ["string", "null"], "maxLength": 128 },
+        "condition": {
+          "description": "Optional structured condition on the edge.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "$ref": "condition.schema.json"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "workflow_id",
+    "name",
+    "input_schema",
+    "output_schema",
+    "nodes",
+    "edges",
+    "execution_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "workflow_id": { "$ref": "#/$defs/uuid" },
+    "workflow_version_id": {
+      "description": "Set for published versions and immutable run snapshots; omitted on mutable drafts.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/uuid" }
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadataObject",
+      "description": "Workflow metadata such as tags, ownership hints, or editor state."
+    },
+    "input_schema": { "$ref": "#/$defs/jsonSchemaObject" },
+    "output_schema": { "$ref": "#/$defs/jsonSchemaObject" },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/workflowNode" }
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/workflowEdge" }
+    },
+    "execution_policy": { "$ref": "#/$defs/executionPolicy" }
+  }
+}

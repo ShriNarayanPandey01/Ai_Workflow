@@ -1,0 +1,10 @@
+{
+  "fixture": "envelope-payload-type-mismatch.json",
+  "schema": "messages/envelope.schema.json",
+  "expects": {
+    "json_schema_valid": false,
+    "semantic_valid": false,
+    "error_codes": ["ENVELOPE_PAYLOAD_TYPE_MISMATCH"],
+    "notes": "The payload schema must match the concrete message_type, not just the broader lifecycle family."
+  }
+}

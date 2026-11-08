@@ -1,0 +1,87 @@
+{
+  "type": "market.price-history@1",
+  "display_name": "Market Data",
+  "description": "Loads adjusted OHLCV series plus coverage and as-of metadata for a bounded symbol list or watchlist.",
+  "category": "market",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "request",
+      "direction": "input",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "symbols": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "series",
+      "direction": "output",
+      "required": true,
+      "cardinality": "single",
+      "schema": {
+        "type": "object",
+        "required": ["as_of", "series"],
+        "properties": {
+          "as_of": { "type": "string", "format": "date-time" },
+          "series": { "type": "array" },
+          "warnings": { "type": "array" }
+        }
+      }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["interval", "adjusted", "missing_data_policy"],
+    "properties": {
+      "start_date": { "type": ["string", "null"], "format": "date" },
+      "end_date": { "type": ["string", "null"], "format": "date" },
+      "interval": {
+        "type": "string",
+        "enum": ["1d", "1wk", "1mo"]
+      },
+      "adjusted": { "type": "boolean" },
+      "missing_data_policy": {
+        "type": "string",
+        "enum": ["warn", "fail", "skip_symbol"]
+      }
+    }
+  },
+  "credential_slots": [
+    {
+      "name": "market_data_provider",
+      "credential_type": "market_data_provider",
+      "required": true
+    }
+  ],
+  "resource_slots": [
+    {
+      "name": "watchlist",
+      "resource_type": "watchlist",
+      "required": false,
+      "description": "Optional project watchlist used when symbols are not provided in input."
+    }
+  ],
+  "capabilities": {
+    "retryable": true,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "line-chart",
+    "color_token": "market",
+    "inspector": "price-history"
+  }
+}

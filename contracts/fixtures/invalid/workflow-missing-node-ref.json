@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "11111111-1111-4111-8111-111111111201",
+  "name": "Missing Node Reference",
+  "input_schema": { "type": "object" },
+  "output_schema": { "type": "object" },
+  "nodes": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaad01",
+      "type": "data.input@1",
+      "position": { "x": 0, "y": 0 },
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbe01",
+      "source_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaad01",
+      "source_port": "value",
+      "target_node_id": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      "target_port": "value"
+    }
+  ],
+  "execution_policy": {
+    "timeout_seconds": 60,
+    "max_node_executions": 10,
+    "max_parallel_nodes": 2,
+    "max_fan_out_items": 10,
+    "max_task_seconds": 60,
+    "max_provider_calls": 10,
+    "max_artifact_bytes": 1048576,
+    "default_retry": {
+      "max_attempts": 1,
+      "initial_backoff_ms": 100,
+      "max_backoff_ms": 1000,
+      "multiplier": 2,
+      "jitter": false
+    }
+  }
+}

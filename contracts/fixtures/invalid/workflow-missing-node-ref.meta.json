@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-missing-node-ref.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["NODE_REF_MISSING"],
+    "notes": "Edge target_node_id does not exist in nodes[]. Semantic graph validator must reject."
+  }
+}

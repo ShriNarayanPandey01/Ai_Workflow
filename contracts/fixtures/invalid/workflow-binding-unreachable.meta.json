@@ -1,0 +1,10 @@
+{
+  "fixture": "workflow-binding-unreachable.json",
+  "schema": "workflow/definition.schema.json",
+  "expects": {
+    "json_schema_valid": true,
+    "semantic_valid": false,
+    "error_codes": ["BINDING_UNREACHABLE"],
+    "notes": "Binding references an isolated node that is not upstream of the target."
+  }
+}

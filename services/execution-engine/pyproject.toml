@@ -1,0 +1,63 @@
+[project]
+name = "ai-workflow-execution"
+version = "0.1.0"
+description = "AI Workflow Platform execution engine"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aio-pika>=9.5.0",
+    "asyncpg>=0.30.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.28.1",
+    "jsonschema>=4.26.0",
+    "pgvector>=0.5.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.0",
+    "uvicorn[standard]>=0.32.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyright>=1.1.390",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "respx>=0.23.1",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+execution-worker = "ai_workflow.worker.execution_worker:main"
+task-worker = "ai_workflow.worker.task_worker:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+dev-mode-dirs = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_workflow"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/ai_workflow", "README.md"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: requires local Postgres/RabbitMQ (docker compose)",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"

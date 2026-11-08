@@ -1,0 +1,58 @@
+{
+  "type": "control.condition@1",
+  "display_name": "Condition",
+  "description": "Evaluates a structured condition AST and routes to a named branch.",
+  "category": "control",
+  "execution_owner": "execution-engine",
+  "inputs": [
+    {
+      "name": "value",
+      "direction": "input",
+      "required": false,
+      "cardinality": "optional",
+      "schema": { "type": "object" }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "true",
+      "direction": "output",
+      "required": false,
+      "cardinality": "optional",
+      "schema": { "type": "object" }
+    },
+    {
+      "name": "false",
+      "direction": "output",
+      "required": false,
+      "cardinality": "optional",
+      "schema": { "type": "object" }
+    }
+  ],
+  "config_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["condition"],
+    "properties": {
+      "condition": {
+        "$ref": "../../workflow/condition.schema.json",
+        "description": "ConditionExpression AST."
+      }
+    }
+  },
+  "credential_slots": [],
+  "resource_slots": [],
+  "capabilities": {
+    "retryable": false,
+    "cancellable": true,
+    "side_effecting": false,
+    "execution_mode": "inline",
+    "emits_progress": false,
+    "resumable": false
+  },
+  "ui": {
+    "icon": "git-branch",
+    "color_token": "control",
+    "inspector": "condition"
+  }
+}

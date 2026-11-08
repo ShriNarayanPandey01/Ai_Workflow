@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "11111111-1111-4111-8111-111111111104",
+  "workflow_version_id": "22222222-2222-4222-8222-222222222204",
+  "name": "Bounded Review Loop",
+  "input_schema": {
+    "type": "object",
+    "required": ["draft"],
+    "properties": {
+      "draft": { "type": "string" }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": true
+  },
+  "nodes": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac01",
+      "type": "data.input@1",
+      "position": { "x": 0, "y": 120 },
+      "config": {}
+    },
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac02",
+      "type": "control.loop@1",
+      "position": { "x": 240, "y": 120 },
+      "config": {
+        "max_iterations": 3,
+        "on_limit": "done",
+        "exit_condition": {
+          "op": "eq",
+          "left": { "kind": "path", "value": "/loop/complete" },
+          "right": { "kind": "literal", "value": true }
+        }
+      }
+    },
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03",
+      "type": "ai.prompt-template@1",
+      "position": { "x": 480, "y": 40 },
+      "config": {
+        "template": "Improve draft: {{draft}}",
+        "required_variables": []
+      }
+    },
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac04",
+      "type": "data.output@1",
+      "position": { "x": 480, "y": 220 },
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbd01",
+      "source_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac01",
+      "source_port": "value",
+      "target_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac02",
+      "target_port": "iteration"
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbd02",
+      "source_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac02",
+      "source_port": "body",
+      "target_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03",
+      "target_port": "variables"
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbd03",
+      "source_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03",
+      "source_port": "text",
+      "target_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac02",
+      "target_port": "iteration",
+      "label": "continue"
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbd04",
+      "source_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac02",
+      "source_port": "done",
+      "target_node_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac04",
+      "target_port": "value"
+    }
+  ],
+  "execution_policy": {
+    "timeout_seconds": 600,
+    "max_node_executions": 100,
+    "max_parallel_nodes": 4,
+    "max_fan_out_items": 100,
+    "max_task_seconds": 600,
+    "max_provider_calls": 50,
+    "max_artifact_bytes": 10485760,
+    "default_retry": {
+      "max_attempts": 2,
+      "initial_backoff_ms": 250,
+      "max_backoff_ms": 5000,
+      "multiplier": 2,
+      "jitter": true
+    }
+  }
+}
