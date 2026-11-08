@@ -9,8 +9,8 @@ import pytest
 from ai_workflow.config.settings import Settings
 from ai_workflow.messaging.inbox import ClaimResult
 from ai_workflow.runtime.cancel import CancelRegistry
-from ai_workflow.runtime.scheduler_state import get_interrupt, save_interrupt
-from ai_workflow.runtime.state import WorkflowState
+from ai_workflow.runtime.graph.scheduler import get_interrupt, save_interrupt
+from ai_workflow.runtime.graph.state import WorkflowState
 from ai_workflow.worker.handler import ExecutionCommandHandler, MessageNotReadyError
 
 

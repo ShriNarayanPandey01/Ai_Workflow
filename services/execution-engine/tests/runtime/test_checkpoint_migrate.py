@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from ai_workflow.runtime.checkpoint import (
+from ai_workflow.runtime.graph.scheduler import DEFINITION_KEY, INTERRUPT_KEY, SCHEDULER_KEY
+from ai_workflow.runtime.graph.state import WorkflowState
+from ai_workflow.runtime.persistence.checkpoint import (
     CHECKPOINT_SCHEMA_VERSION,
     migrate_checkpoint,
     state_from_dict,
     state_to_dict,
 )
-from ai_workflow.runtime.scheduler_state import DEFINITION_KEY, INTERRUPT_KEY, SCHEDULER_KEY
-from ai_workflow.runtime.state import WorkflowState
 
 
 def test_migrate_v0_lifts_runtime_keys() -> None:

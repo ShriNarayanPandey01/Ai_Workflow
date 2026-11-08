@@ -42,7 +42,7 @@ class ChatRequest:
     temperature: float | None = None
     max_output_tokens: int | None = None
     response_format: str = "text"
-    timeout_seconds: int = 60
+    timeout_seconds: int = 240
 
 
 class ChatProvider(Protocol):
@@ -85,7 +85,7 @@ class OpenAICompatibleChatProvider:
         self,
         *,
         api_key: str,
-        base_url: str = "https://api.openai.com/v1",
+        base_url: str = "https://zenmux.ai/api/v1",
         client: httpx.AsyncClient | None = None,
         max_attempts: int = 3,
         initial_backoff_ms: int = 250,
@@ -185,9 +185,9 @@ def build_chat_provider(
     *,
     fake_llm: bool = False,
     api_key: str | None = None,
-    base_url: str = "https://api.openai.com/v1",
+    base_url: str = "https://zenmux.ai/api/v1",
 ) -> ChatProvider:
-    """Select Fake or OpenAI-compatible provider from runtime flags."""
+    """Select Fake or ZenMux's OpenAI-compatible chat provider."""
     if fake_llm or not api_key:
         return FakeChatProvider()
     return OpenAICompatibleChatProvider(api_key=api_key, base_url=base_url)

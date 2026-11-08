@@ -6,8 +6,8 @@ from uuid import UUID, uuid4
 import aio_pika
 
 from ai_workflow.contracts.common.types import JsonValue
-from ai_workflow.messaging import constants as mq
-from ai_workflow.messaging.envelope import ExecutionSubject, MessageEnvelope, build_event_envelope
+from ai_workflow.messaging.broker import MessagingNames
+from ai_workflow.messaging.envelope import ExecutionSubject, MessageEnvelope
 
 
 class RabbitTaskDispatcher:
@@ -42,7 +42,7 @@ class RabbitTaskDispatcher:
         subject["run_id"] = str(run_id)
         subject["node_id"] = str(node_id)
         subject["task_id"] = str(task_id)
-        envelope = build_event_envelope(
+        envelope = MessageEnvelope.event_dict(
             message_id=uuid4(),
             message_type="task.start",
             correlation_id=self._source.correlation_id,
@@ -61,7 +61,7 @@ class RabbitTaskDispatcher:
                 "budgets": budgets,
             },
         )
-        exchange = await self._channel.get_exchange(mq.COMMANDS_EXCHANGE)
+        exchange = await self._channel.get_exchange(MessagingNames.COMMANDS_EXCHANGE)
         body = json.dumps(envelope, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         await exchange.publish(
             aio_pika.Message(
@@ -69,6 +69,6 @@ class RabbitTaskDispatcher:
                 content_type="application/json",
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
             ),
-            routing_key=mq.TASK_START_ROUTING_KEY,
+            routing_key=MessagingNames.TASK_START_ROUTING_KEY,
         )
         return task_id

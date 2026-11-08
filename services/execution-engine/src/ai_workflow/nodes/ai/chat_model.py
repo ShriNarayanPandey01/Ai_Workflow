@@ -20,7 +20,7 @@ class ChatModelNodeExecutor:
         self,
         provider: ChatProvider | None = None,
         credential_resolver: CredentialResolver | None = None,
-        default_base_url: str = "https://api.openai.com/v1",
+        default_base_url: str = "https://zenmux.ai/api/v1",
     ) -> None:
         self._default_provider = provider or FakeChatProvider()
         self._credential_resolver = credential_resolver
@@ -62,7 +62,7 @@ class ChatModelNodeExecutor:
         messages = _build_messages(prompt)
         temperature = config.get("temperature")
         max_output_tokens = config.get("max_output_tokens")
-        timeout_seconds = config.get("timeout_seconds", 60)
+        timeout_seconds = config.get("timeout_seconds", 240)
         response_format = config.get("response_format", "text")
 
         request = ChatRequest(
@@ -73,7 +73,7 @@ class ChatModelNodeExecutor:
             if isinstance(max_output_tokens, int)
             else None,
             response_format=str(response_format) if response_format else "text",
-            timeout_seconds=int(timeout_seconds) if isinstance(timeout_seconds, int) else 60,
+            timeout_seconds=int(timeout_seconds) if isinstance(timeout_seconds, int) else 240,
         )
         try:
             completion = await provider.complete(request)

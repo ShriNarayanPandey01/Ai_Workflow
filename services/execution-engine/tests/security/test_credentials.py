@@ -84,7 +84,7 @@ async def test_chat_model_uses_credential_resolver() -> None:
         credential_resolver=resolver,
     )
     with respx.mock:
-        respx.post("https://api.openai.com/v1/chat/completions").respond(
+        respx.post("https://zenmux.ai/api/v1/chat/completions").respond(
             200,
             json={
                 "choices": [{"message": {"content": "hello back"}}],
@@ -93,7 +93,7 @@ async def test_chat_model_uses_credential_resolver() -> None:
         )
         result = await executor.execute(
             context,
-            {"model": "gpt-4o-mini"},
+            {"model": "deepseek/deepseek-v4-pro"},
             {"prompt": {"text": "hello"}},
         )
     assert "response" in result.outputs
@@ -149,7 +149,7 @@ def test_build_resolver_prefers_http_when_control_plane_url_set() -> None:
     resolver = build_credential_resolver(
         control_plane_url="http://control-plane",
         internal_auth_token="tok",
-        openai_api_key="sk-env",
+        chat_api_key="zenmux-env",
         client=httpx.AsyncClient(),
     )
     assert isinstance(resolver, HttpCredentialResolver)
@@ -161,7 +161,7 @@ def test_build_resolver_falls_back_to_env_without_control_plane() -> None:
     resolver = build_credential_resolver(
         control_plane_url=None,
         internal_auth_token=None,
-        openai_api_key="sk-env",
+        chat_api_key="zenmux-env",
     )
     assert isinstance(resolver, EnvCredentialResolver)
 

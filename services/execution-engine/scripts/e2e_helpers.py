@@ -25,14 +25,13 @@ from starlette.routing import Route
 from uvicorn import Config, Server
 
 from ai_workflow.config.settings import SERVICE_ROOT, Settings, load_settings
-from ai_workflow.messaging import constants as mq
-from ai_workflow.messaging.consumer import connect_rabbitmq
-from ai_workflow.messaging.topology import declare_durable_queue, declare_topology
-from ai_workflow.runtime.action_keys import PostgresActionKeyStore
-from ai_workflow.runtime.bootstrap import build_runner_registry
+from ai_workflow.messaging.broker import MessagingNames as mq
+from ai_workflow.messaging.broker import RabbitBroker
 from ai_workflow.runtime.cancel import CancelRegistry
-from ai_workflow.runtime.db import create_pool, run_migrations
-from ai_workflow.runtime.scheduler_state import INTERRUPT_KEY
+from ai_workflow.runtime.graph.scheduler import INTERRUPT_KEY
+from ai_workflow.runtime.persistence.action_keys import PostgresActionKeyStore
+from ai_workflow.runtime.persistence.database import create_pool, run_migrations
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 from ai_workflow.security.credentials import build_credential_resolver
 from ai_workflow.security.http_client import SafeHttpClient
 from ai_workflow.security.ssrf import fake_resolver
@@ -43,7 +42,7 @@ from ai_workflow.worker.task_worker import _handle_task_command
 
 logger = logging.getLogger(__name__)
 
-WAIT_TIMEOUT_SECONDS = 180.0
+WAIT_TIMEOUT_SECONDS = 300.0
 MOCK_CP_HOST = "127.0.0.1"
 LIVE_HTTP_URL_TEMPLATE = "https://httpbin.org/get?item={{item}}"
 
@@ -78,17 +77,17 @@ def require_real_llm(settings: Settings) -> str:
             "services/execution-engine/.env for a real AI run."
         )
         raise SystemExit(msg)
-    api_key = settings.openai_api_key
+    api_key = settings.chat_api_key
     if not api_key:
         msg = (
-            "OPENAI_API_KEY is missing. Add it to services/execution-engine/.env "
-            "to call a real chat model."
+            "No chat API key is configured. Add OPENAI_API_KEY for OpenAI or a "
+            "ZenMux key to services/execution-engine/.env to run the live chat workflow."
         )
         raise SystemExit(msg)
     return api_key
 
 
-def create_mock_control_plane_app(*, provider_api_key: str) -> Starlette:
+def create_mock_control_plane_app(*, chat_api_key: str) -> Starlette:
     async def _credentials_resolve(request: Request) -> JSONResponse:
         try:
             body = await request.json()
@@ -110,7 +109,7 @@ def create_mock_control_plane_app(*, provider_api_key: str) -> Starlette:
             if not isinstance(slot, str):
                 return JSONResponse({"error": "slots must be strings"}, status_code=400)
             if slot in {"provider", "model_provider"}:
-                credentials[slot] = provider_api_key
+                credentials[slot] = chat_api_key
             elif slot == "search_provider":
                 credentials[slot] = "e2e-search-placeholder"
             else:
@@ -134,6 +133,7 @@ def prepare_live_workflow(
     *,
     http_node_id: str,
     chat_node_id: str,
+    chat_model: str = "deepseek/deepseek-v4-pro",
     http_url_template: str = LIVE_HTTP_URL_TEMPLATE,
     collect_node_id: str | None = None,
     artifact_threshold_bytes: int | None = 256,
@@ -148,6 +148,9 @@ def prepare_live_workflow(
             if isinstance(config, dict):
                 config["url_template"] = http_url_template
         if node.get("id") == chat_node_id:
+            config = node.setdefault("config", {})
+            if isinstance(config, dict):
+                config["model"] = chat_model
             node["credential_refs"] = {
                 "provider": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
             }
@@ -724,14 +727,14 @@ class E2ERuntime:
     results_queue: aio_pika.abc.AbstractQueue
     mock_cp_server: Server
     mock_cp_task: asyncio.Task[None]
-    provider_api_key: str
+    chat_api_key: str
 
 
 async def start_mock_control_plane(
     *,
-    provider_api_key: str,
+    chat_api_key: str,
 ) -> tuple[Server, asyncio.Task[None], int]:
-    app = create_mock_control_plane_app(provider_api_key=provider_api_key)
+    app = create_mock_control_plane_app(chat_api_key=chat_api_key)
     bind = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     bind.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     bind.bind((MOCK_CP_HOST, 0))
@@ -754,7 +757,7 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
     api_key = require_real_llm(preliminary)
 
     mock_cp_server, mock_cp_task, mock_cp_port = await start_mock_control_plane(
-        provider_api_key=api_key,
+        chat_api_key=api_key,
     )
     os.environ["AIW_CONTROL_PLANE_INTERNAL_URL"] = f"http://{MOCK_CP_HOST}:{mock_cp_port}"
     settings = load_settings()
@@ -780,17 +783,18 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
         max_size=max(settings.worker_prefetch + 4, 10),
     )
 
-    connection = await connect_rabbitmq(
+    broker = RabbitBroker()
+    connection = await broker.connect(
         settings.rabbitmq_url, attempts=15, delay_seconds=1.0, role="execution-worker"
     )
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=settings.worker_prefetch)
-    await declare_topology(channel)
+    await broker.declare_topology(channel)
 
     credential_resolver = build_credential_resolver(
         control_plane_url=settings.control_plane_internal_url,
         internal_auth_token=settings.internal_auth_token,
-        openai_api_key=settings.openai_api_key,
+        chat_api_key=settings.chat_api_key,
     )
     action_key_store = PostgresActionKeyStore(pool)
     registry = build_live_http_registry(
@@ -811,7 +815,7 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
     semaphore = asyncio.Semaphore(settings.worker_prefetch)
 
     async def _purge(name: str) -> aio_pika.abc.AbstractQueue:
-        declared = await declare_durable_queue(channel, name)
+        declared = await broker.declare_durable_queue(channel, name)
         purged = await declared.purge()
         if purged:
             logger.info("Purged %s stale message(s) from %s", purged, name)
@@ -871,7 +875,7 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
         mq.EXECUTION_COMMANDS_QUEUE,
         mq.TASK_COMMANDS_QUEUE,
         mq.TASK_RESULTS_QUEUE,
-        settings.openai_base_url,
+        settings.chat_base_url,
     )
 
     collector = EventCollector(channel)
@@ -893,7 +897,7 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
         results_queue=results_queue,
         mock_cp_server=mock_cp_server,
         mock_cp_task=mock_cp_task,
-        provider_api_key=api_key,
+        chat_api_key=api_key,
     )
 
 

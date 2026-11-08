@@ -149,16 +149,16 @@ public class AuthService {
             throw new ProblemException(HttpStatus.UNAUTHORIZED, "REFRESH_REPLAY", INVALID_CREDENTIALS);
         }
         UUID successorId = UUID.randomUUID();
-        RefreshTokenEntity successor = persistRefresh(current.getUserId(), current.getFamilyId(), successorId, now);
-        current.setReplacedById(successor.getId());
+        PersistedRefresh successor = persistRefresh(current.getUserId(), current.getFamilyId(), successorId, now);
+        current.setReplacedById(successor.entity().getId());
         current.setRevokedAt(now);
         refreshTokens.save(current);
-        writeCookie(response, successorRawHolder.get());
+        writeCookie(response, successor.rawToken());
         UserEntity user = users.findById(current.getUserId()).orElseThrow();
         return tokenResponse(user, personalWorkspace(user.getId()));
     }
 
-    private final ThreadLocal<String> successorRawHolder = new ThreadLocal<>();
+    private record PersistedRefresh(RefreshTokenEntity entity, String rawToken) {}
 
     @Transactional
     public void logout(UUID userId, HttpServletRequest request, HttpServletResponse response) {
@@ -201,16 +201,14 @@ public class AuthService {
 
     private void issueRefresh(UUID userId, UUID familyId, HttpServletResponse response) {
         Instant now = clock.instant();
-        persistRefresh(userId, familyId, UUID.randomUUID(), now);
-        writeCookie(response, successorRawHolder.get());
-        successorRawHolder.remove();
+        PersistedRefresh persisted = persistRefresh(userId, familyId, UUID.randomUUID(), now);
+        writeCookie(response, persisted.rawToken());
     }
 
-    private RefreshTokenEntity persistRefresh(UUID userId, UUID familyId, UUID tokenId, Instant now) {
+    private PersistedRefresh persistRefresh(UUID userId, UUID familyId, UUID tokenId, Instant now) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        successorRawHolder.set(raw);
         RefreshTokenEntity entity = new RefreshTokenEntity();
         entity.setId(tokenId);
         entity.setUserId(userId);
@@ -218,7 +216,8 @@ public class AuthService {
         entity.setTokenHash(hashRefresh(raw));
         entity.setExpiresAt(now.plus(properties.refresh().ttl()));
         entity.setCreatedAt(now);
-        return refreshTokens.save(entity);
+        RefreshTokenEntity saved = refreshTokens.save(entity);
+        return new PersistedRefresh(saved, raw);
     }
 
     private String hashRefresh(String raw) {

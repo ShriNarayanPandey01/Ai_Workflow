@@ -21,6 +21,7 @@ class EmbeddingRequest:
     texts: list[str]
     model: str
     dimensions: int = EMBEDDING_DIMENSIONS
+    task_type: str = "RETRIEVAL_DOCUMENT"
     timeout_seconds: int = 60
 
 
@@ -44,12 +45,12 @@ class TransientEmbeddingError(RuntimeError):
         self.status_code = status_code
 
 
-class OpenAICompatibleEmbeddingProvider:
+class GeminiEmbeddingProvider:
     def __init__(
         self,
         *,
         api_key: str,
-        base_url: str = "https://api.openai.com/v1",
+        base_url: str = "https://generativelanguage.googleapis.com/v1beta",
         client: httpx.AsyncClient | None = None,
         max_attempts: int = 3,
         initial_backoff_ms: int = 250,
@@ -88,15 +89,25 @@ class OpenAICompatibleEmbeddingProvider:
         client: httpx.AsyncClient,
         request: EmbeddingRequest,
     ) -> list[list[float]]:
+        model = request.model.removeprefix("models/")
+        if model != "gemini-embedding-001":
+            msg = f"Unsupported Gemini embedding model: {request.model}"
+            raise ValueError(msg)
         body: dict[str, object] = {
-            "model": request.model,
-            "input": request.texts,
-            "dimensions": request.dimensions,
+            "requests": [
+                {
+                    "model": f"models/{model}",
+                    "content": {"parts": [{"text": text}]},
+                    "taskType": request.task_type,
+                    "outputDimensionality": request.dimensions,
+                }
+                for text in request.texts
+            ]
         }
         response = await client.post(
-            f"{self._base_url}/embeddings",
+            f"{self._base_url}/models/{model}:batchEmbedContents",
             headers={
-                "Authorization": f"Bearer {self._api_key}",
+                "x-goog-api-key": self._api_key,
                 "Content-Type": "application/json",
             },
             json=body,
@@ -112,31 +123,33 @@ class OpenAICompatibleEmbeddingProvider:
             raise RuntimeError(msg)
 
         payload = response.json()
-        data = payload.get("data") or []
-        if len(data) != len(request.texts):
+        embeddings = payload.get("embeddings") or []
+        if len(embeddings) != len(request.texts):
             msg = "Embedding provider returned unexpected vector count"
             raise RuntimeError(msg)
-        ordered = sorted(data, key=lambda item: int(item.get("index", 0)))
         vectors: list[list[float]] = []
-        for item in ordered:
-            embedding = item.get("embedding")
+        for item in embeddings:
+            embedding = item.get("values")
             if not isinstance(embedding, list) or not embedding:
                 msg = "Embedding provider returned empty embedding"
                 raise RuntimeError(msg)
-            vectors.append([float(value) for value in embedding])
+            vector = [float(value) for value in embedding]
+            if len(vector) != request.dimensions:
+                msg = "Embedding provider returned unexpected dimensions"
+                raise RuntimeError(msg)
+            vectors.append(vector)
         return vectors
 
 
 def build_embedding_provider(
     *,
     fake_embeddings: bool = False,
-    api_key: str | None = None,
-    base_url: str = "https://api.openai.com/v1",
+    gemini_api_key: str | None = None,
     dimensions: int = EMBEDDING_DIMENSIONS,
 ) -> EmbeddingProvider:
-    if fake_embeddings or not api_key:
+    if fake_embeddings or not gemini_api_key:
         return FakeEmbeddingProvider(dimensions=dimensions)
-    return OpenAICompatibleEmbeddingProvider(api_key=api_key, base_url=base_url)
+    return GeminiEmbeddingProvider(api_key=gemini_api_key)
 
 
 def _fake_vector(text: str, dimensions: int) -> list[float]:

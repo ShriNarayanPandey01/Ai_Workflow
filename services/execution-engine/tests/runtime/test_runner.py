@@ -8,20 +8,20 @@ from uuid import UUID
 import pytest
 
 from ai_workflow.nodes.base import TransientNodeError
-from ai_workflow.runtime.bootstrap import build_runner_registry
-from ai_workflow.runtime.checkpoint import InMemoryCheckpointer
-from ai_workflow.runtime.for_each_runtime import (
+from ai_workflow.runtime.control.foreach import (
     COLLECT_INJECT_KEY,
     load_foreach_frames,
     save_foreach_frames,
 )
-from ai_workflow.runtime.runner import (
+from ai_workflow.runtime.engine.engine import (
     WorkflowRunCompleted,
     WorkflowRunError,
     continue_workflow_from_checkpoint,
     run_workflow,
 )
-from ai_workflow.runtime.scheduler_state import load_scheduler, save_scheduler
+from ai_workflow.runtime.graph.scheduler import load_scheduler, save_scheduler
+from ai_workflow.runtime.persistence.checkpoint import InMemoryCheckpointer
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
 
 class RecordingHooks:

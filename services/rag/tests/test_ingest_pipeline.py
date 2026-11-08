@@ -106,13 +106,14 @@ async def test_ingest_is_idempotent() -> None:
     digest = hashlib.sha256(body).hexdigest()
     document_id = uuid4()
     store = FakeRagStore()
+    embedder = FakeEmbeddingProvider(dimensions=8)
     download = StaticDownloadIntentClient(
         DownloadIntent(url="https://objects.example/doc", object_key="k")
     )
     pipeline = IngestPipeline(
         store=store,  # type: ignore[arg-type]
         download_client=download,
-        embedding_provider=FakeEmbeddingProvider(dimensions=8),
+        embedding_provider=embedder,
         embedding_model="fake",
         embedding_dimensions=8,
         chunk_size=50,
@@ -142,6 +143,7 @@ async def test_ingest_is_idempotent() -> None:
     assert second.idempotent_hit is True
     assert store.begin_calls == 1
     assert len(store.activated) == 1
+    assert all(call.task_type == "RETRIEVAL_DOCUMENT" for call in embedder.calls)
 
 
 @pytest.mark.asyncio

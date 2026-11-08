@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.nodes.base import ExecutionContext, NodeResult
-from ai_workflow.runtime.action_keys import (
+from ai_workflow.runtime.persistence.action_keys import (
     ActionKeyConflictError,
     ActionKeyStore,
     canonical_json,

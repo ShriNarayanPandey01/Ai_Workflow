@@ -15,32 +15,36 @@ from ai_workflow.config.settings import Settings
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.log_context import execution_log_extra
 from ai_workflow.messaging.envelope import (
-    parse_execution_cancel,
-    parse_execution_resume,
-    parse_execution_start,
+    EnvelopeValidationError,
+    EnvelopeValidator,
+    ExecutionSubject,
+    MessageEnvelope,
+    ParsedExecutionCancel,
+    ParsedExecutionResume,
+    ParsedExecutionStart,
 )
 from ai_workflow.messaging.inbox import ClaimResult, PostgresInbox
-from ai_workflow.messaging.publisher import EventPublisher, publisher_hooks
-from ai_workflow.messaging.validation import EnvelopeValidationError, validate_envelope_document
-from ai_workflow.runtime.action_keys import PostgresActionKeyStore
-from ai_workflow.runtime.bootstrap import build_runner_registry
+from ai_workflow.messaging.publisher import EventPublisher, PublisherHooks
 from ai_workflow.runtime.cancel import CancelRegistry
-from ai_workflow.runtime.checkpoint import DEFINITION_HASH_KEY, PostgresCheckpointer
-from ai_workflow.runtime.definition_store import PostgresDefinitionStore
-from ai_workflow.runtime.lease import LeaseError, RunLeaseStore
-from ai_workflow.runtime.registry import RuntimeRegistry
-from ai_workflow.runtime.runner import (
+from ai_workflow.runtime.engine.engine import (
     ResumeValidationError,
     WorkflowRunCancelled,
     WorkflowRunCompleted,
     WorkflowRunError,
+    WorkflowRunPaused,
     WorkflowRunTimedOut,
     WorkflowRunWaiting,
     continue_workflow_from_checkpoint,
     resume_workflow,
     run_workflow,
 )
-from ai_workflow.runtime.scheduler_state import DEFINITION_KEY, clear_interrupt, get_interrupt
+from ai_workflow.runtime.graph.scheduler import DEFINITION_KEY, clear_interrupt, get_interrupt
+from ai_workflow.runtime.persistence.action_keys import PostgresActionKeyStore
+from ai_workflow.runtime.persistence.checkpoint import DEFINITION_HASH_KEY, PostgresCheckpointer
+from ai_workflow.runtime.persistence.definition_store import PostgresDefinitionStore
+from ai_workflow.runtime.persistence.lease import LeaseError, RunLeaseStore
+from ai_workflow.runtime.registry import RuntimeRegistry
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 from ai_workflow.security.credentials import CredentialResolver, build_credential_resolver
 from ai_workflow.security.http_client import SafeHttpClient, create_async_client
 from ai_workflow.security.redaction import redact_value
@@ -87,9 +91,11 @@ def _parse_envelope(body: bytes) -> dict[str, Any]:
 
 async def _publish_outcome(
     publisher: EventPublisher,
-    outcome: WorkflowRunCompleted | WorkflowRunWaiting | WorkflowRunCancelled,
+    outcome: WorkflowRunCompleted | WorkflowRunWaiting | WorkflowRunCancelled | WorkflowRunPaused,
 ) -> None:
     """Publish the terminal or waiting event that matches a workflow run outcome."""
+    if isinstance(outcome, WorkflowRunPaused):
+        raise RuntimeError("Manual pause outcomes are not yet wired to worker events")
     if isinstance(outcome, WorkflowRunWaiting):
         await publisher.publish_execution_waiting(
             waiting_reason=outcome.waiting_reason,
@@ -139,6 +145,7 @@ class ExecutionCommandHandler:
             pool,
             stale_after=timedelta(seconds=settings.max_run_seconds + 60),
         )
+        self._envelope_validator = EnvelopeValidator(settings.contracts_root)
         self._leases = lease_store
         self._definitions = definition_store
         self._http_client = http_client
@@ -148,7 +155,7 @@ class ExecutionCommandHandler:
             self._credential_resolver = build_credential_resolver(
                 control_plane_url=settings.control_plane_internal_url,
                 internal_auth_token=settings.internal_auth_token,
-                openai_api_key=settings.openai_api_key,
+                chat_api_key=settings.chat_api_key,
             )
 
     async def aclose(self) -> None:
@@ -193,12 +200,8 @@ class ExecutionCommandHandler:
         depending on whether a checkpoint already exists for the run_id.
         Publishes completed/waiting/failed events and marks the inbox row done.
         """
-        validate_envelope_document(
-            raw,
-            contracts_root=self._settings.contracts_root,
-            source="execution.start",
-        )
-        parsed = parse_execution_start(raw)
+        self._envelope_validator.validate(raw, source="execution.start")
+        parsed = ParsedExecutionStart.from_document(raw)
         if parsed.envelope.message_type != "execution.start":
             msg = f"Unexpected message type: {parsed.envelope.message_type}"
             raise EnvelopeValidationError(msg)
@@ -231,7 +234,7 @@ class ExecutionCommandHandler:
         )
 
         checkpointer = PostgresCheckpointer(self._pool)
-        hooks = publisher_hooks(publisher)
+        hooks = PublisherHooks(publisher)
         dispatcher = RabbitTaskDispatcher(
             channel=self._channel,
             source_envelope=parsed.envelope,
@@ -241,8 +244,10 @@ class ExecutionCommandHandler:
             await publisher.publish_execution_started()
 
         existing = await checkpointer.load(thread_id=parsed.subject.run_id)
+        lease_acquired = False
         try:
             await self._acquire_lease(parsed.subject.run_id)
+            lease_acquired = True
             if existing is not None and get_interrupt(existing) is not None:
                 logger.info(
                     "Skipping execution.start for waiting run %s",
@@ -257,6 +262,8 @@ class ExecutionCommandHandler:
                 return
             cancel_request = await self._cancel_registry.is_cancelled(parsed.subject.run_id)
             if cancel_request is not None:
+                await self._release_lease(parsed.subject.run_id)
+                lease_acquired = False
                 await publisher.publish_execution_cancelled(reason=cancel_request.reason)
                 await self._inbox.mark_completed(message_id=parsed.envelope.message_id)
                 return
@@ -295,6 +302,9 @@ class ExecutionCommandHandler:
             await self._inbox.mark_failed(message_id=parsed.envelope.message_id)
             raise
         except WorkflowRunTimedOut as exc:
+            if lease_acquired:
+                await self._release_lease(parsed.subject.run_id)
+                lease_acquired = False
             await publisher.publish_execution_failed(
                 code="TIMED_OUT",
                 message=str(exc),
@@ -303,11 +313,15 @@ class ExecutionCommandHandler:
             await self._inbox.mark_failed(message_id=parsed.envelope.message_id)
             return
         except WorkflowRunError as exc:
+            if lease_acquired:
+                await self._release_lease(parsed.subject.run_id)
+                lease_acquired = False
             await publisher.publish_execution_failed(code="WORKFLOW_RUN_FAILED", message=str(exc))
             await self._inbox.mark_failed(message_id=parsed.envelope.message_id)
             return
         finally:
-            await self._release_lease(parsed.subject.run_id)
+            if lease_acquired:
+                await self._release_lease(parsed.subject.run_id)
 
         await _publish_outcome(publisher, outcome)
         await self._cancel_registry.clear(parsed.subject.run_id)
@@ -320,12 +334,8 @@ class ExecutionCommandHandler:
         command against the stored interrupt metadata, applies the decision,
         and publishes the resulting outcome event.
         """
-        validate_envelope_document(
-            raw,
-            contracts_root=self._settings.contracts_root,
-            source="execution.resume",
-        )
-        parsed = parse_execution_resume(raw)
+        self._envelope_validator.validate(raw, source="execution.resume")
+        parsed = ParsedExecutionResume.from_document(raw)
         if parsed.envelope.message_type != "execution.resume":
             msg = f"Unexpected message type: {parsed.envelope.message_type}"
             raise EnvelopeValidationError(msg)
@@ -357,7 +367,7 @@ class ExecutionCommandHandler:
             subject=parsed.subject,
         )
         checkpointer = PostgresCheckpointer(self._pool)
-        hooks = publisher_hooks(publisher)
+        hooks = PublisherHooks(publisher)
         dispatcher = RabbitTaskDispatcher(
             channel=self._channel,
             source_envelope=parsed.envelope,
@@ -435,12 +445,8 @@ class ExecutionCommandHandler:
         ``_execute_loop`` can exit cleanly. If no checkpoint exists (run never
         started), publishes ``execution.cancelled`` immediately.
         """
-        validate_envelope_document(
-            raw,
-            contracts_root=self._settings.contracts_root,
-            source="execution.cancel",
-        )
-        parsed = parse_execution_cancel(raw)
+        self._envelope_validator.validate(raw, source="execution.cancel")
+        parsed = ParsedExecutionCancel.from_document(raw)
         if parsed.envelope.message_type != "execution.cancel":
             msg = f"Unexpected message type: {parsed.envelope.message_type}"
             raise EnvelopeValidationError(msg)
@@ -492,12 +498,7 @@ class ExecutionCommandHandler:
     async def _handle_task_result(self, raw: dict[str, Any]) -> None:
         """Resume a waiting parent run from task.completed / task.failed events."""
         envelope_type = str(raw.get("message_type"))
-        validate_envelope_document(
-            raw,
-            contracts_root=self._settings.contracts_root,
-            source=envelope_type,
-        )
-        from ai_workflow.messaging.envelope import ExecutionSubject, MessageEnvelope
+        self._envelope_validator.validate(raw, source=envelope_type)
 
         envelope = MessageEnvelope.model_validate(raw)
         subject = ExecutionSubject.model_validate(envelope.subject)
@@ -586,7 +587,7 @@ class ExecutionCommandHandler:
                 definition=definition,
                 registry=self._registry,
                 checkpointer=checkpointer,
-                hooks=publisher_hooks(publisher),
+                hooks=PublisherHooks(publisher),
                 contracts_root=self._settings.contracts_root,
                 max_payload_bytes=self._settings.max_payload_bytes,
                 max_loop_iterations=self._settings.max_loop_iterations,

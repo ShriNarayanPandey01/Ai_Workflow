@@ -11,13 +11,11 @@ import aio_pika
 from ai_workflow.config.settings import SERVICE_ROOT, load_settings, require_service_role
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.log_context import execution_log_extra
-from ai_workflow.messaging import constants as mq
-from ai_workflow.messaging.consumer import connect_rabbitmq, consume_queue
-from ai_workflow.messaging.envelope import MessageEnvelope, build_event_envelope
-from ai_workflow.messaging.topology import declare_topology
-from ai_workflow.runtime.bootstrap import build_runner_registry
+from ai_workflow.messaging.broker import MessagingNames, RabbitBroker
+from ai_workflow.messaging.envelope import MessageEnvelope
 from ai_workflow.runtime.cancel import CancelRegistry
-from ai_workflow.runtime.db import create_pool, run_migrations
+from ai_workflow.runtime.persistence.database import create_pool, run_migrations
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 from ai_workflow.security.redaction import redact_value
 from ai_workflow.tasks.base import TaskContext
 from ai_workflow.tasks.checkpoints import PostgresTaskCheckpointStore
@@ -45,10 +43,11 @@ async def run_task_worker() -> None:
     checkpoints = PostgresTaskCheckpointStore(pool)
     registry = build_runner_registry(settings.contracts_root, settings=settings, pool=pool)
 
-    connection = await connect_rabbitmq(settings.rabbitmq_url, role=_ROLE)
+    broker = RabbitBroker()
+    connection = await broker.connect(settings.rabbitmq_url, role=_ROLE)
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=settings.worker_prefetch)
-    await declare_topology(channel)
+    await broker.declare_topology(channel)
     semaphore = asyncio.Semaphore(settings.worker_prefetch)
 
     async def on_message(message: aio_pika.abc.AbstractIncomingMessage) -> None:
@@ -67,8 +66,8 @@ async def run_task_worker() -> None:
                 return
             await message.ack()
 
-    await consume_queue(channel, mq.TASK_COMMANDS_QUEUE, on_message)
-    logger.info("Task worker listening on %s", mq.TASK_COMMANDS_QUEUE, extra=extra)
+    await broker.consume(channel, MessagingNames.TASK_COMMANDS_QUEUE, on_message)
+    logger.info("Task worker listening on %s", MessagingNames.TASK_COMMANDS_QUEUE, extra=extra)
     try:
         await asyncio.Future()
     finally:
@@ -109,7 +108,7 @@ async def _handle_task_command(
             channel,
             envelope,
             message_type="task.failed",
-            routing_key=mq.TASK_FAILED_ROUTING_KEY,
+            routing_key=MessagingNames.TASK_FAILED_ROUTING_KEY,
             payload={
                 "task_id": str(task_id),
                 "status": "CANCELLED",
@@ -150,7 +149,7 @@ async def _handle_task_command(
         channel,
         envelope,
         message_type="task.completed",
-        routing_key=mq.TASK_COMPLETED_ROUTING_KEY,
+        routing_key=MessagingNames.TASK_COMPLETED_ROUTING_KEY,
         payload={
             "task_id": str(task_id),
             "status": "SUCCEEDED",
@@ -167,7 +166,7 @@ async def _publish_task_event(
     routing_key: str,
     payload: dict[str, JsonValue],
 ) -> None:
-    envelope = build_event_envelope(
+    envelope = MessageEnvelope.event_dict(
         message_id=uuid4(),
         message_type=message_type,
         correlation_id=source.correlation_id,
@@ -178,7 +177,7 @@ async def _publish_task_event(
         sequence=1,
         payload=payload,
     )
-    exchange = await channel.get_exchange(mq.EVENTS_EXCHANGE)
+    exchange = await channel.get_exchange(MessagingNames.EVENTS_EXCHANGE)
     body = json.dumps(envelope, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     await exchange.publish(
         aio_pika.Message(

@@ -6,13 +6,13 @@ from uuid import UUID
 import pytest
 
 from ai_workflow.runtime.cancel import CancelRegistry
-from ai_workflow.runtime.checkpoint import InMemoryCheckpointer
-from ai_workflow.runtime.runner import (
+from ai_workflow.runtime.engine.engine import (
     WorkflowRunCancelled,
     WorkflowRunCompleted,
     continue_workflow_from_checkpoint,
     run_workflow,
 )
+from ai_workflow.runtime.persistence.checkpoint import InMemoryCheckpointer
 
 
 @pytest.mark.asyncio
@@ -33,7 +33,7 @@ async def test_run_cancels_before_next_node(
     repo_contracts_root,
     workflow_linear_definition: dict,
 ) -> None:
-    from ai_workflow.runtime.bootstrap import build_runner_registry
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     registry = build_runner_registry(repo_contracts_root)
     checkpointer = InMemoryCheckpointer()
@@ -60,7 +60,7 @@ async def test_continue_from_checkpoint_after_partial_run(
     repo_contracts_root,
     workflow_linear_definition: dict,
 ) -> None:
-    from ai_workflow.runtime.bootstrap import build_runner_registry
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     registry = build_runner_registry(repo_contracts_root)
     checkpointer = InMemoryCheckpointer()
@@ -97,7 +97,7 @@ async def test_late_result_is_discarded_when_cancelled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from ai_workflow.nodes.data.input import InputNodeExecutor
-    from ai_workflow.runtime.bootstrap import build_runner_registry
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     run_id = UUID("44444444-4444-4444-8444-444444444405")
     cancel_registry = CancelRegistry()
@@ -130,7 +130,7 @@ async def test_continue_from_checkpoint_mid_run(
     repo_contracts_root,
     workflow_linear_definition: dict,
 ) -> None:
-    from ai_workflow.runtime.bootstrap import build_runner_registry
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     class _CountingCheckpointer(InMemoryCheckpointer):
         def __init__(self) -> None:

@@ -23,8 +23,8 @@ Prerequisites (from repo root):
     docker compose up -d postgres rabbitmq
     docker compose stop execution-worker task-worker
 
-Requires OPENAI_API_KEY in services/execution-engine/.env (AIW_FAKE_LLM must
-not be true).
+Requires OPENAI_API_KEY (or a ZenMux API key) in services/execution-engine/.env
+(AIW_FAKE_LLM must not be true).
 
 Usage:
     cd services/execution-engine
@@ -68,7 +68,7 @@ from e2e_helpers import (
 )
 
 from ai_workflow.config.settings import REPO_ROOT
-from ai_workflow.messaging import constants as mq
+from ai_workflow.messaging.broker import MessagingNames as mq
 
 logger = logging.getLogger(__name__)
 
@@ -114,11 +114,12 @@ DEFAULT_INPUT = {
 }
 
 
-def _prepare_workflow() -> dict[str, Any]:
+def _prepare_workflow(*, chat_model: str) -> dict[str, Any]:
     return prepare_live_workflow(
         load_json(FULL_FIXTURE),
         http_node_id=HTTP_NODE_ID,
         chat_node_id=CHAT_NODE_ID,
+        chat_model=chat_model,
         collect_node_id=COLLECT_NODE_ID,
         artifact_threshold_bytes=256,
     )
@@ -180,7 +181,7 @@ async def _invariants(
         runtime.pool,
         runtime.collector.events,
         run_id,
-        secret=runtime.provider_api_key if secret else None,
+        secret=runtime.chat_api_key if secret else None,
     )
     if err:
         return fail(step, err)
@@ -795,7 +796,7 @@ async def _run_high_score_path(
     items: list[str],
     interactive: bool,
 ) -> int:
-    workflow = _prepare_workflow()
+    workflow = _prepare_workflow(chat_model=runtime.settings.chat_model)
     run_input = {"topic": topic, "score": score, "items": items}
     envelope, run_id = build_start_envelope(workflow, run_input=run_input)
     workflow_id = workflow["workflow_id"]
@@ -977,7 +978,7 @@ async def _run_low_score_path(
     topic: str,
     items: list[str],
 ) -> int:
-    workflow = _prepare_workflow()
+    workflow = _prepare_workflow(chat_model=runtime.settings.chat_model)
     run_input = {"topic": topic, "score": 0.1, "items": items}
     envelope, run_id = build_start_envelope(workflow, run_input=run_input)
 
@@ -1028,7 +1029,7 @@ async def _run_cancel_path(
     items: list[str],
 ) -> int:
     """Hit approval wait, then execution.cancel → immediate execution.cancelled."""
-    workflow = _prepare_workflow()
+    workflow = _prepare_workflow(chat_model=runtime.settings.chat_model)
     run_input = {"topic": topic, "score": 0.9, "items": items}
     envelope, run_id = build_start_envelope(workflow, run_input=run_input)
     workflow_id = workflow["workflow_id"]

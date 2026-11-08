@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ai_workflow.runtime.db import sql_is_placeholder
+from ai_workflow.runtime.persistence.database import sql_is_placeholder
 
 
 def test_sql_is_placeholder_comment_only() -> None:

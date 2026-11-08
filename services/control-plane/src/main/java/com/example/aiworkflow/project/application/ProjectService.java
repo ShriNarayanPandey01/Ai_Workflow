@@ -54,10 +54,13 @@ public class ProjectService {
     @Transactional(readOnly = true)
     public CursorPage<ProjectResponse> list(UUID userId, String cursor, int limit) {
         UUID workspaceId = personalWorkspaceId(userId);
+        int capped = Math.min(Math.max(limit, 1), 100);
         Cursors.Key key = cursor == null ? null : Cursors.decode(cursor);
         List<ProjectEntity> rows = projects.listPage(
-                workspaceId, key == null ? null : key.createdAt(), key == null ? null : key.id());
-        int capped = Math.min(Math.max(limit, 1), 100);
+                workspaceId,
+                key == null ? null : key.createdAt(),
+                key == null ? null : key.id(),
+                org.springframework.data.domain.PageRequest.of(0, capped + 1));
         List<ProjectEntity> page = rows.size() > capped ? rows.subList(0, capped) : rows;
         String next = rows.size() > capped
                 ? Cursors.encode(page.get(page.size() - 1).getCreatedAt(), page.get(page.size() - 1).getId())

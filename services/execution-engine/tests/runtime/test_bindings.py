@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ai_workflow.contracts.workflow.definition import InputBinding, WorkflowEdge, WorkflowNode
-from ai_workflow.runtime.bindings import (
+from ai_workflow.runtime.semantics.bindings import (
     bindings_for_node,
     infer_pass_through_bindings,
     is_valid_json_pointer,

@@ -56,8 +56,8 @@ Catalog manifests load from repo-root `contracts/nodes/catalog/` (`AIW_CONTRACTS
 Run a linear Input → Output workflow without RabbitMQ:
 
 ```python
-from ai_workflow.runtime.bootstrap import build_runner_registry
-from ai_workflow.runtime.runner import run_workflow
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
+from ai_workflow.runtime.engine.engine import run_workflow
 
 registry = build_runner_registry(contracts_root)
 result = await run_workflow(definition, {"order_id": "ord-1"}, registry=registry)
@@ -88,7 +88,7 @@ Live e2e (control-plane mimic over real Postgres + RabbitMQ; workers run in-proc
 docker compose up -d postgres rabbitmq
 docker compose stop execution-worker task-worker
 cd services/execution-engine
-# Requires OPENAI_API_KEY in .env (script forces AIW_FAKE_LLM=false)
+# Requires OPENAI_API_KEY or a ZenMux API key in .env (script forces AIW_FAKE_LLM=false)
 uv run python scripts/trigger_full_features_workflow.py
 uv run python scripts/trigger_combo_workflow.py
 ```
@@ -124,6 +124,15 @@ Required environment variables:
 | `AIW_SERVICE_ROLE` | Process role (`execution-api`, `execution-worker`, etc.) |
 
 Platform limits (`AIW_MAX_*`) have defaults; see `.env.example`.
+
+Model configuration uses distinct names by purpose. `AIW_CHAT_MODEL` and
+`AIW_CHAT_ROUTING_PROVIDER` select the model and optional ZenMux routing provider
+used by the live E2E scripts; individual workflow chat nodes specify their own
+model. `AIW_EMBEDDING_MODEL` configures embeddings. The reserved
+`AIW_IMAGE_GENERATION_MODEL` setting is not yet used by an image-generation
+executor, and there is no separate vision-model setting yet. Existing environments
+using `AIW_IMAGE_LLM_MODEL`, `AIW_IMAGE_LLM_PROVIDER`, or `AIW_IMAGE_MODEL` must
+rename them to the corresponding new variables.
 
 ### Run checks
 

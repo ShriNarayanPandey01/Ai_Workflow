@@ -90,6 +90,26 @@
         }
       }
     },
+    "executionPaused": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pause_id", "revision", "pause_state"],
+      "properties": {
+        "pause_id": { "type": "string", "format": "uuid" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "pause_state": { "const": "PAUSED" }
+      }
+    },
+    "executionUnpaused": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pause_id", "revision", "pause_state"],
+      "properties": {
+        "pause_id": { "type": "string", "format": "uuid" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "pause_state": { "const": "ACTIVE" }
+      }
+    },
     "executionCompleted": {
       "type": "object",
       "additionalProperties": false,
@@ -133,6 +153,8 @@
     { "$ref": "#/$defs/executionQueued" },
     { "$ref": "#/$defs/executionStarted" },
     { "$ref": "#/$defs/executionWaiting" },
+    { "$ref": "#/$defs/executionPaused" },
+    { "$ref": "#/$defs/executionUnpaused" },
     { "$ref": "#/$defs/executionCompleted" },
     { "$ref": "#/$defs/executionFailed" },
     { "$ref": "#/$defs/executionCancelled" }

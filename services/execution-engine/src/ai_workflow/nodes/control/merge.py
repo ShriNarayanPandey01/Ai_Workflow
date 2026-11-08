@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ai_workflow.contracts.common.types import JsonValue
 from ai_workflow.nodes.base import ExecutionContext, NodeResult
-from ai_workflow.runtime.bindings import json_pointer_get, json_pointer_set
+from ai_workflow.runtime.semantics.bindings import json_pointer_get, json_pointer_set
 
 
 class MergeNodeExecutor:

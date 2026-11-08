@@ -78,7 +78,7 @@ async def test_handler_runs_workflow_for_new_claim(
     execution_start_body: bytes,
     repo_contracts_root: Path,
 ) -> None:
-    from ai_workflow.runtime.bootstrap import build_runner_registry
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     pool = MagicMock()
     channel = MagicMock()
@@ -111,21 +111,21 @@ async def test_handler_runs_workflow_for_new_claim(
 
     original_postgres = handler_module.PostgresCheckpointer
     original_publisher = handler_module.EventPublisher
-    original_hooks = handler_module.publisher_hooks
+    original_hooks = handler_module.PublisherHooks
     handler_module.PostgresCheckpointer = MagicMock(return_value=checkpointer)
     handler_module.EventPublisher = MagicMock(return_value=publisher)
     hooks = MagicMock()
     hooks.on_node_started = AsyncMock()
     hooks.on_node_completed = AsyncMock()
     hooks.on_node_failed = AsyncMock()
-    handler_module.publisher_hooks = MagicMock(return_value=hooks)
+    handler_module.PublisherHooks = MagicMock(return_value=hooks)
 
     try:
         await handler.handle(execution_start_body)
     finally:
         handler_module.PostgresCheckpointer = original_postgres
         handler_module.EventPublisher = original_publisher
-        handler_module.publisher_hooks = original_hooks
+        handler_module.PublisherHooks = original_hooks
 
     handler._inbox.mark_completed.assert_awaited_once()
     publisher.publish_execution_started.assert_awaited_once()
@@ -137,7 +137,7 @@ async def test_handler_ignores_start_while_waiting(
     handler_settings: Settings,
     execution_start_body: bytes,
 ) -> None:
-    from ai_workflow.runtime.state import WorkflowState
+    from ai_workflow.runtime.graph.state import WorkflowState
 
     waiting = WorkflowState()
     waiting.runtime["_interrupt"] = {
@@ -188,7 +188,7 @@ async def test_handler_cancel_waiting_publishes_cancelled(
     handler_settings: Settings,
     repo_contracts_root: Path,
 ) -> None:
-    from ai_workflow.runtime.state import WorkflowState
+    from ai_workflow.runtime.graph.state import WorkflowState
 
     cancel_body = (
         repo_contracts_root / "fixtures" / "valid" / "envelope-execution-cancel.json"

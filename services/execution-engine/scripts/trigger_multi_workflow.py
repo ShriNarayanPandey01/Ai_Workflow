@@ -5,8 +5,8 @@ Prerequisites (from repo root):
     docker compose up -d postgres rabbitmq
     docker compose stop execution-worker task-worker
 
-Requires OPENAI_API_KEY in services/execution-engine/.env (AIW_FAKE_LLM must
-not be true).
+Requires OPENAI_API_KEY (or a ZenMux API key) in services/execution-engine/.env
+(AIW_FAKE_LLM must not be true).
 
 Usage:
     cd services/execution-engine
@@ -56,7 +56,7 @@ from trigger_full_features_workflow import (
 )
 
 from ai_workflow.config.settings import REPO_ROOT
-from ai_workflow.messaging import constants as mq
+from ai_workflow.messaging.broker import MessagingNames as mq
 
 FIXTURES_DIR = REPO_ROOT / "contracts" / "fixtures" / "valid"
 CHECKPOINT_FIXTURE = FIXTURES_DIR / "workflow-e2e-checkpoint-retry.json"
@@ -72,19 +72,21 @@ REVIEW_NODE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac65"
 DEFAULT_REVIEW_PROMPT = "Explain workflow checkpoint resume in one short sentence."
 
 
-def _prepare_checkpoint_workflow() -> dict[str, Any]:
+def _prepare_checkpoint_workflow(*, chat_model: str) -> dict[str, Any]:
     return prepare_live_workflow(
         load_json(CHECKPOINT_FIXTURE),
         http_node_id=CHECKPOINT_HTTP_NODE_ID,
         chat_node_id="",
+        chat_model=chat_model,
     )
 
 
-def _prepare_review_loop_workflow() -> dict[str, Any]:
+def _prepare_review_loop_workflow(*, chat_model: str) -> dict[str, Any]:
     return prepare_live_workflow(
         load_json(REVIEW_LOOP_FIXTURE),
         http_node_id="",
         chat_node_id=REVIEW_CHAT_NODE_ID,
+        chat_model=chat_model,
     )
 
 
@@ -107,7 +109,7 @@ async def _invariants(runtime: E2ERuntime, run_id: str, step: str) -> int:
         runtime.pool,
         runtime.collector.events,
         run_id,
-        secret=runtime.provider_api_key,
+        secret=runtime.chat_api_key,
     )
     if error:
         return fail(step, error)
@@ -115,7 +117,7 @@ async def _invariants(runtime: E2ERuntime, run_id: str, step: str) -> int:
 
 
 async def _run_checkpoint_retry_path(runtime: E2ERuntime) -> int:
-    workflow = _prepare_checkpoint_workflow()
+    workflow = _prepare_checkpoint_workflow(chat_model=runtime.settings.chat_model)
     install_crash_once_node(
         runtime.handler._registry,  # noqa: SLF001 - e2e crash-injection seam
         node_type="action.http-request@1",
@@ -256,7 +258,7 @@ async def _run_human_review_loop_path(
     prompt: str,
     auto_loop: bool,
 ) -> int:
-    workflow = _prepare_review_loop_workflow()
+    workflow = _prepare_review_loop_workflow(chat_model=runtime.settings.chat_model)
     run_input = {"prompt": prompt}
     envelope, run_id = build_start_envelope(workflow, run_input=run_input)
     workflow_id = workflow["workflow_id"]

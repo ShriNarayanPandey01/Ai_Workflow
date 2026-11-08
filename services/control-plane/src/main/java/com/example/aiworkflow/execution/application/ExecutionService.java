@@ -140,16 +140,20 @@ public class ExecutionService {
         if (!normalizedMode.equals("draft") && !normalizedMode.equals("published")) {
             throw new ProblemException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "mode must be draft or published");
         }
+        String effectiveIdempotencyKey = (idempotencyKey == null || idempotencyKey.isBlank())
+                ? UUID.randomUUID().toString()
+                : idempotencyKey;
+        JsonNode effectiveInput = (input == null || input.isNull()) ? objectMapper.createObjectNode() : input;
         return executions
-                .findByProjectIdAndIdempotencyKey(project.getId(), idempotencyKey)
+                .findByProjectIdAndIdempotencyKey(project.getId(), effectiveIdempotencyKey)
                 .map(ExecutionEntity::getId)
                 .orElseGet(() -> createRun(
                         actorUserId,
                         project,
                         workflow,
                         normalizedMode,
-                        input,
-                        idempotencyKey,
+                        effectiveInput,
+                        effectiveIdempotencyKey,
                         workflowVersionId,
                         triggerType,
                         triggerId));
@@ -184,7 +188,8 @@ public class ExecutionService {
             definition = parse(version.getDefinitionJson());
             versionId = version.getId();
         }
-        validateInput(definition.path("input_schema"), input);
+        JsonNode effectiveInput = (input == null || input.isNull()) ? objectMapper.createObjectNode() : input;
+        validateInput(definition.path("input_schema"), effectiveInput);
         UUID runId = UUID.randomUUID();
         ExecutionEntity run = new ExecutionEntity();
         run.setId(runId);
@@ -194,7 +199,7 @@ public class ExecutionService {
         run.setWorkflowVersionId(versionId);
         run.setMode(mode);
         run.setStatus("QUEUED");
-        run.setInputJson(input.toString());
+        run.setInputJson(effectiveInput.toString());
         run.setDefinitionJson(definition.toString());
         run.setDraftRevision(draftRevision);
         run.setIdempotencyKey(idempotencyKey);
@@ -207,7 +212,7 @@ public class ExecutionService {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("mode", mode);
         payload.set("definition", definition);
-        payload.set("input", input);
+        payload.set("input", effectiveInput);
         if ("draft".equals(mode)) {
             payload.put("draft_revision", draftRevision);
         } else {
@@ -242,9 +247,12 @@ public class ExecutionService {
     public CursorPage<ExecutionSummary> list(UUID userId, UUID projectId, String cursor, int limit) {
         projects.requireMember(userId, projectId);
         Cursors.Key key = cursor == null ? null : Cursors.decode(cursor);
-        List<ExecutionEntity> rows = executions.listPage(
-                projectId, key == null ? null : key.createdAt(), key == null ? null : key.id());
         int capped = Math.min(Math.max(limit, 1), 100);
+        List<ExecutionEntity> rows = executions.listPage(
+                projectId,
+                key == null ? null : key.createdAt(),
+                key == null ? null : key.id(),
+                org.springframework.data.domain.PageRequest.of(0, capped + 1));
         List<ExecutionEntity> page = rows.size() > capped ? rows.subList(0, capped) : rows;
         String next = rows.size() > capped
                 ? Cursors.encode(page.getLast().getCreatedAt(), page.getLast().getId())
@@ -307,15 +315,17 @@ public class ExecutionService {
         ExecutionEntity run = requireRun(userId, projectId, runId);
         int after = 0;
         if (lastEventId != null && !lastEventId.isBlank()) {
-            after = Integer.parseInt(lastEventId);
+            try {
+                after = Integer.parseInt(lastEventId.trim());
+            } catch (NumberFormatException ignored) {
+                after = 0;
+            }
         }
         List<ExecutionEventEntity> replay =
                 events.findByExecutionIdAndSequenceGreaterThanOrderBySequenceAsc(runId, after);
         SseEmitter emitter = sse.subscribe(runId);
         sse.sendReplay(emitter, replay);
-        if (ExecutionStateMachine.isTerminal(run.getStatus()) && replay.isEmpty()) {
-            emitter.complete();
-        } else if (ExecutionStateMachine.isTerminal(run.getStatus())) {
+        if (ExecutionStateMachine.isTerminal(run.getStatus())) {
             emitter.complete();
         }
         return emitter;

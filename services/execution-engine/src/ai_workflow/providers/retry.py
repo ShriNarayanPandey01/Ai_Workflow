@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
 
 import httpx
 
-T = TypeVar("T")
 
-
-async def retry_provider_call(
+async def retry_provider_call[T](
     operation: Callable[[], Awaitable[T]],
     *,
     max_attempts: int,

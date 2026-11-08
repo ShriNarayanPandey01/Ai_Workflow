@@ -10,7 +10,7 @@ class ServiceAuthProvider(Protocol):
     """Provides Authorization headers for internal service-to-service calls."""
 
     def authorization_header(self) -> str: ...
-
+  
 
 class StaticServiceAuth:
     """Bearer-token auth backed by a fixed internal service token."""

@@ -61,9 +61,9 @@
       "type": "ai.chat-model@1",
       "position": { "x": 640, "y": 40 },
       "config": {
-        "model": "gpt-4o-mini",
+        "model": "deepseek/deepseek-v4-pro",
         "max_output_tokens": 128,
-        "timeout_seconds": 60,
+        "timeout_seconds": 240,
         "temperature": 0
       },
       "credential_refs": {},

@@ -25,7 +25,8 @@ public interface ExecutionRepository extends JpaRepository<ExecutionEntity, UUID
     List<ExecutionEntity> listPage(
             @Param("projectId") UUID projectId,
             @Param("afterCreatedAt") Instant afterCreatedAt,
-            @Param("afterId") UUID afterId);
+            @Param("afterId") UUID afterId,
+            org.springframework.data.domain.Pageable pageable);
 
     @Query(
             value = "SELECT COUNT(*) > 0 FROM executions WHERE definition_json::text LIKE CONCAT('%', :credentialId, '%')",

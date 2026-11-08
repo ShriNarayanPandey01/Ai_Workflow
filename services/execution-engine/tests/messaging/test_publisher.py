@@ -6,7 +6,7 @@ import asyncpg
 import pytest
 
 from ai_workflow.config.settings import SERVICE_ROOT
-from ai_workflow.runtime.db import create_pool, run_migrations
+from ai_workflow.runtime.persistence.database import create_pool, run_migrations
 
 pytestmark = pytest.mark.integration
 

@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ai-workflow — build the graph, trust the run</title>
+<meta name="description" content="AI Workflow turns node graphs into durable executions. Compose AI steps, retrieval, and approvals — every run is checkpointed, validated, and streamed back live." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --paper:oklch(0.978 0.004 255);
+  --ink:oklch(0.22 0.02 260);
+  --muted-fg:oklch(0.47 0.02 258);
+  --hairline:oklch(0.91 0.008 260);
+  --card:oklch(0.995 0.002 255);
+  --cobalt:oklch(0.52 0.19 258);
+  --cobalt-deep:oklch(0.44 0.18 258);
+  --gold:oklch(0.72 0.14 80);
+  --gold-deep:oklch(0.52 0.115 78);
+  --green:oklch(0.55 0.14 152);
+  --red:oklch(0.55 0.2 26);
+  --slate:oklch(0.5 0.03 255);
+  --violet:oklch(0.48 0.16 300);
+  --teal:oklch(0.52 0.11 195);
+  --amber:oklch(0.68 0.135 80);
+  --orange:oklch(0.6 0.16 45);
+  --leaf:oklch(0.5 0.13 155);
+  --indigo:oklch(0.5 0.16 272);
+  --wash:oklch(0.955 0.012 256);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Archivo",ui-sans-serif,system-ui,sans-serif;
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:color-mix(in oklch,var(--cobalt) 22%,transparent)}
+:focus-visible{outline:2px solid var(--cobalt);outline-offset:2px;border-radius:2px}
+a{color:inherit}
+[hidden]{display:none!important}
+.container{max-width:1120px;margin-inline:auto;padding-inline:clamp(20px,5vw,48px)}
+.skip-link{position:absolute;left:-9999px;top:0;background:var(--card);padding:8px 14px;z-index:99}
+.skip-link:focus-visible{left:8px;top:8px}
+
+.topbar{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--hairline)}
+.topbar-inner{display:flex;align-items:center;justify-content:space-between;height:60px}
+.wordmark{display:inline-flex;align-items:center;gap:9px;text-decoration:none;font-weight:700;font-stretch:112%;letter-spacing:-0.01em;font-size:17px}
+.topnav{display:flex;align-items:center;gap:10px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:inherit;font-weight:600;font-size:15px;text-decoration:none;border-radius:8px;border:1px solid transparent;padding:11px 20px;cursor:pointer;min-height:44px;transition:background-color .15s ease,border-color .15s ease,color .15s ease}
+.btn-sm{padding:7px 14px;min-height:34px;font-size:13.5px}
+.btn-primary{background:var(--cobalt);color:#fff}
+.btn-primary:hover{background:var(--cobalt-deep)}
+.btn-gold{background:var(--gold);color:var(--ink)}
+.btn-gold:hover{background:color-mix(in oklch,var(--gold) 86%,black)}
+.btn-gold:disabled{cursor:default;background:color-mix(in oklch,var(--gold) 55%,white);color:color-mix(in oklch,var(--ink) 60%,white)}
+.btn-ghost{border-color:var(--hairline);background:var(--card)}
+.btn-ghost:hover{border-color:var(--muted-fg)}
+
+.hero{padding-block:clamp(56px,9vw,110px) clamp(48px,7vw,84px)}
+.hero-grid{display:grid;gap:clamp(36px,5vw,56px);align-items:center;margin-top:clamp(28px,4vw,44px)}
+.hero-grid > *{min-width:0}
+@media (min-width:1024px){.hero-grid{grid-template-columns:minmax(320px,4fr) 7fr}}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted-fg)}
+.eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--cobalt)}
+.eyebrow-live::before{animation:pulse-dot 1.6s ease-in-out infinite}
+@keyframes pulse-dot{50%{opacity:.35}}
+h1{font-size:clamp(2.45rem,5.2vw,3.5rem);font-weight:900;font-stretch:118%;line-height:1.02;letter-spacing:-0.015em;text-wrap:balance}
+h1 span{display:inline}
+@media (max-width:520px){h1{font-size:2.2rem}h1 span{display:block}}
+.lede{font-size:clamp(1.05rem,1.6vw,1.2rem);color:var(--muted-fg);max-width:34em;margin-bottom:30px}
+.hero-cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.hero-note{margin-top:14px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--muted-fg)}
+
+.panel{background:var(--card);border:1px solid var(--hairline);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgb(20 24 46 / .04),0 12px 32px -18px rgb(20 24 46 / .12)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--hairline)}
+.panel-title{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--muted-fg);letter-spacing:.04em}
+.badge{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:.06em;padding:3px 9px;border-radius:999px;background:color-mix(in oklch,var(--slate) 16%,var(--paper));color:var(--muted-fg)}
+.badge[data-state="running"]{background:var(--cobalt);color:#fff}
+.badge[data-state="waiting"]{background:var(--gold);color:var(--ink)}
+.badge[data-state="succeeded"]{background:var(--green);color:#fff}
+.canvas-dots-bg{background-color:color-mix(in oklch,var(--wash) 55%,var(--card));background-image:radial-gradient(var(--hairline) 1px,transparent 1px);background-size:16px 16px}
+.run-svg{display:block;width:100%;height:auto}
+.node-chip{fill:var(--card);stroke:var(--hairline);transition:stroke .2s ease,filter .2s ease}
+.node-label{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;fill:var(--muted-fg)}
+.node-dot{transition:fill .2s ease}
+.node.running .node-chip{stroke:var(--cobalt);filter:drop-shadow(0 0 0 transparent)}
+.node.succeeded .node-dot{fill:var(--green)!important}
+.node.waiting .node-halo{opacity:.3;animation:halo 1.4s ease-in-out infinite}
+.node.approved .node-halo{opacity:.14}
+@keyframes halo{50%{opacity:.06}}
+.edge-path{fill:none;stroke:var(--hairline);stroke-width:1.5;transition:stroke .25s ease}
+.edge-path.traversed{stroke:var(--cobalt)}
+.edge-path.dashed{stroke-dasharray:3 5}
+#token{fill:var(--cobalt);stroke:#fff;stroke-width:1.5}
+.trace{height:132px;overflow-y:auto;overflow-x:auto;padding:10px 16px;border-top:1px solid var(--hairline);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;line-height:1.75;background:var(--card)}
+.tl{display:flex;gap:10px;white-space:nowrap}
+.tt{color:var(--muted-fg);flex-shrink:0;width:72px}
+.te{flex-shrink:0;width:148px}
+.te-exec{color:var(--slate)}
+.te-node{color:var(--cobalt)}
+.te-human{color:var(--gold-deep)}
+.te-done{color:var(--green)}
+.td{flex-shrink:0}
+.panel-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-top:1px solid var(--hairline)}
+.panel-foot-note{font-size:12.5px;color:var(--muted-fg)}
+.panel-foot-actions{display:flex;gap:8px}
+.demo-caption{margin-top:10px;font-size:12.5px;color:var(--muted-fg)}
+
+.section{padding-block:clamp(64px,9vw,116px);border-top:1px solid var(--hairline)}
+.split{display:grid;gap:clamp(28px,4vw,56px)}
+.split > *{min-width:0}
+@media (min-width:900px){.split{grid-template-columns:1fr 1fr;align-items:start}}
+.sec-head{margin-bottom:18px}
+h2{font-size:clamp(1.55rem,3vw,2.15rem);font-weight:800;font-stretch:112%;line-height:1.06;letter-spacing:-0.01em;margin-top:12px;text-wrap:balance}
+.sec-body p{color:var(--muted-fg);max-width:36em}
+.sec-body p+p{margin-top:12px}
+.codeblock{background:oklch(0.21 0.02 260);color:oklch(0.93 0.008 255);border-radius:12px;padding:20px 22px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.75px;line-height:1.7;overflow-x:auto}
+.codeblock .ck{color:oklch(0.75 0.09 235)}
+.codeblock .cs{color:oklch(0.82 0.1 85)}
+.codeblock .cn{color:oklch(0.72 0.1 155)}
+.guarantees{list-style:none;display:grid;gap:0;border:1px solid var(--hairline);border-radius:12px;overflow:hidden;background:var(--card)}
+.guarantees li{display:flex;gap:12px;align-items:baseline;padding:14px 18px;font-size:15px}
+.guarantees li+li{border-top:1px solid var(--hairline)}
+.guarantees li::before{content:"▸";color:var(--cobalt);font-size:13px}
+.checkpoint-strip{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:26px 0 18px}
+.cp{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;padding:6px 11px;border:1px solid var(--hairline);border-radius:8px;background:var(--card);color:var(--muted-fg)}
+.cp-hot{border-color:var(--cobalt);color:var(--cobalt)}
+.cp-arrow{color:var(--muted-fg)}
+.goldcallout{border-left:3px solid var(--gold);padding:6px 0 6px 20px;margin-top:22px}
+.goldcallout p{color:var(--ink);font-size:16.5px;max-width:30em}
+.trace-excerpt{border:1px solid var(--hairline);border-radius:12px;background:var(--card);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.8;padding:16px 18px;overflow-x:auto}
+.catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:12px;margin-top:26px}
+.cat-card{border:1px solid var(--hairline);border-radius:12px;background:var(--card);padding:16px 18px}
+.cat-name{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+.cat-name i{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.cat-ids{margin-top:7px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;color:var(--muted-fg);line-height:1.7}
+.cta-band{border-top:1px solid var(--hairline);padding-block:clamp(72px,10vw,128px);background:linear-gradient(color-mix(in oklch,var(--cobalt) 4%,var(--paper)),var(--paper))}
+.cta-inner{text-align:center;max-width:620px;margin-inline:auto}
+.cta-inner .lede{margin-inline:auto}
+.cta-actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:30px}
+footer{border-top:1px solid var(--hairline);padding-block:28px}
+.footer-inner{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--muted-fg)}
+.footer-links{display:flex;gap:18px}
+.footer-links a{text-decoration:none}
+.footer-links a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="container topbar-inner">
+    <a class="wordmark" href="/welcome.html">
+      <svg width="19" height="19" viewBox="0 0 18 18" aria-hidden="true"><rect x="1.5" y="1.5" width="15" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.5" cy="6.5" r="1.4" fill="var(--cobalt)"/><circle cx="5.5" cy="11.5" r="1.4" fill="var(--gold)"/><path d="M8 6.5h4M8 11.5h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      ai-workflow
+    </a>
+    <nav class="topnav" aria-label="Account">
+      <a class="btn btn-ghost btn-sm" href="/login">Sign in</a>
+      <a class="btn btn-primary btn-sm" href="/register">Start building</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="container">
+      <p class="eyebrow eyebrow-live" id="heroEyebrow">execution.trace · live</p>
+      <h1><span>Build the graph.</span> <span>Trust the run.</span></h1>
+      <div class="hero-grid">
+        <div>
+          <p class="lede">AI Workflow turns node graphs into durable executions. Compose AI steps,
+          retrieval, and approvals — every run is checkpointed, validated against your schemas,
+          and streamed back node by node.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="/register">Start building</a>
+          </div>
+          <p class="hero-note">contract-first · /api/v1 · secrets stay behind credential IDs</p>
+        </div>
+
+        <div>
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">demo-run · workflow-e2e-full</span>
+            <span class="badge" id="runBadge" data-state="queued" aria-live="polite">QUEUED</span>
+          </div>
+          <div class="canvas-dots-bg">
+            <svg class="run-svg" id="runSvg" viewBox="0 0 664 252" role="img" aria-label="Live demo: an input node feeds a chat model through a condition. The run pauses at a human approval node until you approve, then writes the output.">
+              <path id="eF" class="edge-path dashed" d="M414 184 C458 228 502 216 538 206" />
+              <path id="e0" class="edge-path" d="M128 150 C146 150 150 84 164 84" />
+              <path id="e1" class="edge-path" d="M272 84 C290 84 292 170 306 170" />
+              <path id="e2" class="edge-path" d="M414 170 C430 170 432 82 444 82" />
+              <path id="e3" class="edge-path" d="M552 82 C572 82 592 120 592 186" />
+              <g class="node" id="n0">
+                <rect class="node-chip" x="20" y="136" width="108" height="28" rx="14" />
+                <circle class="node-dot" cx="33" cy="150" r="4.5" fill="var(--slate)" />
+                <text class="node-label" x="44" y="153.5">input</text>
+              </g>
+              <g class="node" id="n1">
+                <rect class="node-chip" x="164" y="70" width="108" height="28" rx="14" />
+                <circle class="node-dot" cx="177" cy="84" r="4.5" fill="var(--cobalt)" />
+                <text class="node-label" x="188" y="87.5">chat-model</text>
+              </g>
+              <g class="node" id="n2">
+                <rect class="node-chip" x="306" y="156" width="108" height="28" rx="14" />
+                <circle class="node-dot" cx="319" cy="170" r="4.5" fill="var(--violet)" />
+                <text class="node-label" x="330" y="173.5">condition</text>
+              </g>
+              <g class="node" id="n3">
+                <circle class="node-halo" cx="498" cy="82" r="13" fill="var(--gold)" opacity="0" />
+                <rect class="node-chip" x="444" y="68" width="108" height="28" rx="14" />
+                <circle class="node-dot" cx="457" cy="82" r="4.5" fill="var(--amber)" />
+                <text class="node-label" x="468" y="85.5">approval</text>
+              </g>
+              <g class="node" id="n4">
+                <rect class="node-chip" x="538" y="188" width="108" height="28" rx="14" />
+                <circle class="node-dot" cx="551" cy="202" r="4.5" fill="var(--slate)" />
+                <text class="node-label" x="562" y="205.5">output</text>
+              </g>
+              <circle id="token" cx="74" cy="150" r="5" />
+            </svg>
+          </div>
+          <div class="trace" id="traceLog" role="log" aria-label="Execution event log"></div>
+          <div class="panel-foot">
+            <span class="panel-foot-note" id="footNote">Waiting for the engine to pick up the run…</span>
+            <span class="panel-foot-actions">
+              <button class="btn btn-gold btn-sm" id="approveBtn" hidden>Approve run ▸</button>
+              <button class="btn btn-ghost btn-sm" id="rerunBtn" hidden>Run again</button>
+            </span>
+          </div>
+        </div>
+        <p class="demo-caption">This demo is real mechanics, not footage: the run waits on you exactly
+        the way production runs wait on your team.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container split">
+      <div class="sec-head">
+        <p class="eyebrow">ai.chat-model@1 · typed ports</p>
+        <h2>Every wire is typed.</h2>
+      </div>
+      <div class="sec-body">
+        <p>Nodes publish input and output schemas. The builder binds fields between them, and nothing
+        ships until both ends agree.</p>
+        <p>Mismatched types fail validation before a run starts — twice: once when you publish, once
+        again when the engine picks it up.</p>
+      </div>
+      <pre class="codeblock" style="grid-column:1/-1">{
+  <span class="ck">"input_bindings"</span>: [{
+    <span class="ck">"target_port"</span>: <span class="cs">"value"</span>,
+    <span class="ck">"target_path"</span>: <span class="cs">"/order_id"</span>,
+    <span class="ck">"source_node"</span>: <span class="cs">"data.input@1"</span>,
+    <span class="ck">"source_path"</span>: <span class="cs">"/order_id"</span>
+  }],
+  <span class="ck">"execution_policy"</span>: { <span class="ck">"max_node_executions"</span>: <span class="cn">50</span>, <span class="ck">"timeout_seconds"</span>: <span class="cn">300</span> }
+}</pre>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container split">
+      <div class="sec-head">
+        <p class="eyebrow">control.condition@1 · durable runs</p>
+        <h2>Runs survive restarts.</h2>
+      </div>
+      <div class="sec-body">
+        <p>Each step writes a checkpoint before the run moves on. If a worker dies mid-flight, the
+        engine leases the run to another worker and resumes from the last checkpoint.</p>
+        <div class="checkpoint-strip" aria-hidden="true">
+          <span class="cp">step starts</span><span class="cp-arrow">→</span>
+          <span class="cp">output persisted</span><span class="cp-arrow">→</span>
+          <span class="cp cp-hot">checkpoint written</span><span class="cp-arrow">→</span>
+          <span class="cp">next step leased</span>
+        </div>
+        <ul class="guarantees">
+          <li>At-least-once delivery, deduplicated by inbox</li>
+          <li>Bounded loops — every cycle has a budget</li>
+          <li>Retries with exponential backoff and jitter</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container split">
+      <div class="sec-head">
+        <p class="eyebrow" style="color:var(--gold-deep)">human.approval@1 · humans in the loop</p>
+        <h2>You are a node in the graph.</h2>
+      </div>
+      <div class="sec-body">
+        <p>Approval and review steps pause the run and hold it — minutes, hours, days, whatever the
+        decision takes. State stays intact the whole time.</p>
+        <div class="goldcallout">
+          <p>The demo above stopped and asked you. Production runs ask your team the same way —
+          from the Approvals queue, with full context attached.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container split">
+      <div class="sec-head">
+        <p class="eyebrow">node.lifecycle · watch every event</p>
+        <h2>No silent steps.</h2>
+      </div>
+      <div class="sec-body">
+        <p>Executions stream node and task lifecycle events over SSE. Open a run and watch it think,
+        or replay what happened after the fact.</p>
+      </div>
+      <div class="trace-excerpt" style="grid-column:1/-1">
+<div><span class="tt">00:02.114</span>&nbsp;&nbsp;<span style="color:var(--cobalt)">node.lifecycle&nbsp;&nbsp;</span>ai.chat-model@1 → SUCCEEDED · usage 1,842 tokens</div>
+<div><span class="tt">00:02.118</span>&nbsp;&nbsp;<span style="color:var(--cobalt)">task.progress&nbsp;&nbsp;</span>writer/draft · attempt 1 of 3</div>
+<div><span class="tt">00:03.402</span>&nbsp;&nbsp;<span style="color:var(--gold-deep)">human.approval&nbsp;</span>WAITING · assigned to ops-team</div>
+<div><span class="tt">00:41.907</span>&nbsp;&nbsp;<span style="color:var(--gold-deep)">approval.granted</span>&nbsp;by m.okafor · note "numbers verified"</div>
+<div><span class="tt">00:41.931</span>&nbsp;&nbsp;<span style="color:oklch(0.55 0.14 152)">execution.completed</span>&nbsp;&nbsp;5 nodes · 4 checkpoints · 41.9s</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="sec-head">
+        <p class="eyebrow">nodes/catalog · eight families</p>
+        <h2>A vocabulary of parts.</h2>
+      </div>
+      <div class="sec-body">
+        <p>Data, control flow, AI, retrieval, human judgment, actions, market data, research.
+        Every node is versioned and schema-described — the catalog on this page is the palette
+        the whole product speaks in.</p>
+      </div>
+      <div class="catalog-grid">
+        <div class="cat-card"><div class="cat-name"><i style="background:var(--slate)"></i>Data</div><div class="cat-ids">data.input@1<br />data.output@1</div></div>
+        <div class="cat-card"><div class="cat-name"><i style="background:var(--violet)"></i>Control</div><div class="cat-ids">control.condition@1<br />control.for-each@1 · control.loop@1</div></div>
+        <div class="cat-card"><div class="cat-name"><i style="background:var(--cobalt)"></i>AI</div><div class="cat-ids">ai.chat-model@1<br />ai.prompt-template@1</div></div>
+        <div class="cat-card"><div class="cat-name"><i style="background:var(--teal)"></i>RAG</div><div class="cat-ids">rag.retrieve@1</div></div>
+        <div class="cat-card"><div class="cat-name"><i style="background:var(--amber)"></i>Human</div><div class="cat-ids">human.approval@1<br />human.review@1</div></div>
+        <div class="cat-card"><div class="cat-name"><i style="background:var(--orange)"></i>Action</div><div class="cat-ids">action.http-request@1<br />action.cleanup-plan@1</div></div>
+        <div class="cat-card"><div class="cat-name"><i style="background:var(--leaf)"></i>Market</div><div class="cat-ids">market.price-history@1<br />market.momentum-screen@1</div></div>
+        <div class="cat-card"><div class="cat-name"><i style="background:var(--indigo)"></i>Research</div><div class="cat-ids">research.deep-research@1</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <div class="container cta-inner">
+      <p class="eyebrow" style="justify-content:center">data.output@1 · your turn</p>
+      <h2>Build your first workflow.</h2>
+      <p class="lede">Create an account, open a project, drag a few nodes together. Your first run
+      is minutes away — and it will wait politely if it needs you.</p>
+      <div class="cta-actions">
+        <a class="btn btn-primary" href="/register">Start building</a>
+        <a class="btn btn-ghost" href="/login">Sign in</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container footer-inner">
+    <span>ai-workflow — durable workflow execution</span>
+    <span class="footer-links">
+      <a href="/welcome.html">Overview</a>
+      <a href="/login">Sign in</a>
+      <a href="/register">Start building</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  var badge = document.getElementById("runBadge")
+  var log = document.getElementById("traceLog")
+  var token = document.getElementById("token")
+  var footNote = document.getElementById("footNote")
+  var approveBtn = document.getElementById("approveBtn")
+  var rerunBtn = document.getElementById("rerunBtn")
+  var eyebrow = document.getElementById("heroEyebrow")
+
+  var NODES = {
+    n0: { id: "data.input@1", label: "input" },
+    n1: { id: "ai.chat-model@1", label: "chat-model" },
+    n2: { id: "control.condition@1", label: "condition" },
+    n3: { id: "human.approval@1", label: "approval" },
+    n4: { id: "data.output@1", label: "output" }
+  }
+  var EDGES = ["e0", "e1", "e2", "e3"]
+  var running = false
+  var runStart = 0
+
+  function stamp() {
+    var t = Math.max(0, performance.now() - runStart)
+    var mm = String(Math.floor(t / 60000)).padStart(2, "0")
+    var ss = String(Math.floor(t / 1000) % 60).padStart(2, "0")
+    var ms = String(Math.floor(t % 1000)).padStart(3, "0")
+    return mm + ":" + ss + "." + ms
+  }
+
+  function trace(kind, cls, detail) {
+    var row = document.createElement("div")
+    row.className = "tl"
+    var t = document.createElement("span"); t.className = "tt"; t.textContent = stamp()
+    var e = document.createElement("span"); e.className = "te " + cls; e.textContent = kind
+    var d = document.createElement("span"); d.className = "td"; d.textContent = detail
+    row.append(t, e, d)
+    log.appendChild(row)
+    while (log.children.length > 120) log.removeChild(log.firstChild)
+    log.scrollTop = log.scrollHeight
+  }
+
+  function setStatus(state, label) {
+    badge.dataset.state = state
+    badge.textContent = label
+  }
+
+  function node(id, state) {
+    var el = document.getElementById(id)
+    el.classList.remove("running", "waiting", "approved")
+    if (state) el.classList.add(state)
+  }
+
+  function edge(id, on) {
+    document.getElementById(id).classList.toggle("traversed", !!on)
+  }
+
+  function placeTokenAtStart() {
+    token.setAttribute("cx", 74)
+    token.setAttribute("cy", 150)
+  }
+
+  function moveAlong(pathId, ms) {
+    return new Promise(function (resolve) {
+      var path = document.getElementById(pathId)
+      var len = path.getTotalLength()
+      function finish() {
+        var p = path.getPointAtLength(len)
+        token.setAttribute("cx", p.x)
+        token.setAttribute("cy", p.y)
+        resolve()
+      }
+      if (reduced || ms <= 0) return finish()
+      var t0 = performance.now()
+      requestAnimationFrame(function tick(now) {
+        var k = Math.min(1, (now - t0) / ms)
+        var p = path.getPointAtLength(len * k)
+        token.setAttribute("cx", p.x)
+        token.setAttribute("cy", p.y)
+        if (k < 1) requestAnimationFrame(tick)
+        else { edge(pathId, true); resolve() }
+      })
+    })
+  }
+
+  function sleep(ms) {
+    if (reduced) return Promise.resolve()
+    return new Promise(function (r) { setTimeout(r, ms) })
+  }
+
+  function waitForApproval() {
+    return new Promise(function (resolve) {
+      approveBtn.hidden = false
+      approveBtn.addEventListener("click", function () {
+        approveBtn.hidden = true
+        approveBtn.disabled = true
+        resolve()
+      }, { once: true })
+    })
+  }
+
+  function resetRun() {
+    Object.keys(NODES).forEach(function (id) { node(id, null) })
+    EDGES.forEach(function (id) { edge(id, false) })
+    log.textContent = ""
+    placeTokenAtStart()
+    rerunBtn.hidden = true
+    approveBtn.hidden = true
+    approveBtn.disabled = false
+    setStatus("queued", "QUEUED")
+  }
+
+  function executeRun() {
+    if (running) return
+    running = true
+    resetRun()
+    runStart = performance.now()
+
+    var seq = Promise.resolve()
+      .then(function () {
+        trace("execution.start", "te-exec", "run accepted · snapshot frozen · policy max_node_executions=50")
+        footNote.textContent = "Engine picked up the run."
+        eyebrow.textContent = "execution.trace · running"
+        return sleep(700)
+      })
+      .then(function () {
+        setStatus("running", "RUNNING")
+        node("n0", "running")
+        trace("node.lifecycle", "te-node", NODES.n0.id + " → RUNNING")
+        return sleep(450)
+      })
+      .then(function () {
+        node("n0", "succeeded")
+        trace("node.lifecycle", "te-node", NODES.n0.id + " → SUCCEEDED · bound /order_id")
+        return moveAlong("e0", reduced ? 0 : 650)
+      })
+      .then(function () {
+        node("n1", "running")
+        trace("node.lifecycle", "te-node", NODES.n1.id + " → RUNNING")
+        return sleep(1100)
+      })
+      .then(function () {
+        node("n1", "succeeded")
+        trace("node.lifecycle", "te-node", NODES.n1.id + " → SUCCEEDED · usage 1,842 tokens")
+        return moveAlong("e1", reduced ? 0 : 650)
+      })
+      .then(function () {
+        node("n2", "running")
+        trace("node.lifecycle", "te-node", NODES.n2.id + " → RUNNING")
+        return sleep(750)
+      })
+      .then(function () {
+        node("n2", "succeeded")
+        trace("node.lifecycle", "te-node", NODES.n2.id + ' → branch "needs_review" → approval')
+        return moveAlong("e2", reduced ? 0 : 650)
+      })
+      .then(function () {
+        node("n3", "waiting")
+        setStatus("waiting", "WAITING")
+        footNote.textContent = "This run is waiting on you."
+        trace("human.approval", "te-human", NODES.n3.id + " → WAITING · assigned to visitor")
+        eyebrow.textContent = "execution.trace · awaiting operator"
+        return waitForApproval()
+      })
+      .then(function () {
+        node("n3", "succeeded")
+        document.getElementById("n3").classList.add("approved")
+        trace("approval.granted", "te-human", "by you · operator confirmed")
+        setStatus("running", "RUNNING")
+        footNote.textContent = "Resuming from checkpoint…"
+        eyebrow.textContent = "execution.trace · running"
+        return sleep(350)
+      })
+      .then(function () {
+        trace("node.lifecycle", "te-node", NODES.n3.id + " → SUCCEEDED · decision recorded")
+        return moveAlong("e3", reduced ? 0 : 650)
+      })
+      .then(function () {
+        node("n4", "succeeded")
+        trace("node.lifecycle", "te-node", NODES.n4.id + " → SUCCEEDED · wrote /summary")
+        trace("execution.completed", "te-done", "5 nodes · 4 checkpoints · " + stamp())
+        setStatus("succeeded", "SUCCEEDED")
+        footNote.textContent = "Run complete. Every step was checkpointed."
+        eyebrow.textContent = "execution.trace · completed"
+        rerunBtn.hidden = false
+        running = false
+      })
+      .catch(function () { running = false })
+  }
+
+  rerunBtn.addEventListener("click", executeRun)
+  if (reduced) {
+    footNote.textContent = "Motion is reduced on your device. Steps jump instead of glide — the run still waits for your approval."
+  }
+  setTimeout(executeRun, 400)
+})()
+</script>
+</body>
+</html>

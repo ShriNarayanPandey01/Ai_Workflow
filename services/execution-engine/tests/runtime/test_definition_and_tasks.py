@@ -4,9 +4,12 @@ from uuid import uuid4
 
 import pytest
 
-from ai_workflow.runtime.definition_store import InMemoryDefinitionStore, hash_definition
-from ai_workflow.runtime.runner import _parse_definition
-from ai_workflow.runtime.workflow_ir import get_workflow_ir
+from ai_workflow.runtime.engine.engine import _parse_definition
+from ai_workflow.runtime.graph.ir import get_workflow_ir
+from ai_workflow.runtime.persistence.definition_store import (
+    InMemoryDefinitionStore,
+    hash_definition,
+)
 from ai_workflow.tasks.base import TaskContext
 from ai_workflow.tasks.research import DeepResearchTaskExecutor
 

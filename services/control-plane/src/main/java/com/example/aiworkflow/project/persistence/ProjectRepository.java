@@ -21,5 +21,6 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
     List<ProjectEntity> listPage(
             @Param("workspaceId") UUID workspaceId,
             @Param("cursorCreatedAt") Instant cursorCreatedAt,
-            @Param("cursorId") UUID cursorId);
+            @Param("cursorId") UUID cursorId,
+            org.springframework.data.domain.Pageable pageable);
 }

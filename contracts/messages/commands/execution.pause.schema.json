@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-workflow.local/contracts/messages/commands/execution.pause.schema.json",
+  "title": "ExecutionPausePayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pause_id", "revision", "requested_by"],
+  "properties": {
+    "pause_id": { "type": "string", "format": "uuid" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "requested_by": { "type": "string", "format": "uuid" }
+  }
+}

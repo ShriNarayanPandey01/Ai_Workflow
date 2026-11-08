@@ -5,10 +5,10 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from ai_workflow.runtime.bootstrap import build_runner_registry
-from ai_workflow.runtime.checkpoint import InMemoryCheckpointer
-from ai_workflow.runtime.runner import WorkflowRunWaiting, run_workflow
-from ai_workflow.runtime.scheduler_state import get_interrupt
+from ai_workflow.runtime.engine.engine import WorkflowRunWaiting, run_workflow
+from ai_workflow.runtime.graph.scheduler import get_interrupt
+from ai_workflow.runtime.persistence.checkpoint import InMemoryCheckpointer
+from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
 
 class _RecordingDispatcher:

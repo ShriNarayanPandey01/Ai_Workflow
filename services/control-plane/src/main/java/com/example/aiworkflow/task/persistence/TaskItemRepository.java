@@ -23,5 +23,6 @@ public interface TaskItemRepository extends JpaRepository<TaskItemEntity, UUID> 
     List<TaskItemEntity> listPage(
             @Param("taskJobId") UUID taskJobId,
             @Param("afterCreatedAt") Instant afterCreatedAt,
-            @Param("afterId") UUID afterId);
+            @Param("afterId") UUID afterId,
+            org.springframework.data.domain.Pageable pageable);
 }

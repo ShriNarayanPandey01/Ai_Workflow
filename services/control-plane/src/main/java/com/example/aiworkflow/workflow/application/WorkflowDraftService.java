@@ -76,10 +76,13 @@ public class WorkflowDraftService {
     @Transactional(readOnly = true)
     public CursorPage<WorkflowSummary> list(UUID userId, UUID projectId, String cursor, int limit) {
         projects.requireMember(userId, projectId);
+        int capped = Math.min(Math.max(limit, 1), 100);
         Cursors.Key key = cursor == null ? null : Cursors.decode(cursor);
         List<WorkflowEntity> rows = workflows.listPage(
-                projectId, key == null ? null : key.createdAt(), key == null ? null : key.id());
-        int capped = Math.min(Math.max(limit, 1), 100);
+                projectId,
+                key == null ? null : key.createdAt(),
+                key == null ? null : key.id(),
+                org.springframework.data.domain.PageRequest.of(0, capped + 1));
         List<WorkflowEntity> page = rows.size() > capped ? rows.subList(0, capped) : rows;
         String next = rows.size() > capped
                 ? Cursors.encode(page.getLast().getCreatedAt(), page.getLast().getId())

@@ -7,16 +7,16 @@ import pytest
 from ai_workflow.nodes.base import ExecutionContext
 from ai_workflow.nodes.human.approval import HumanApprovalNodeExecutor
 from ai_workflow.nodes.human.review import HumanReviewNodeExecutor
-from ai_workflow.runtime.checkpoint import InMemoryCheckpointer
-from ai_workflow.runtime.interrupt import WorkflowInterrupt
-from ai_workflow.runtime.runner import (
+from ai_workflow.runtime.engine.engine import (
     ResumeValidationError,
     WorkflowRunCompleted,
     WorkflowRunWaiting,
     resume_workflow,
     run_workflow,
 )
-from ai_workflow.runtime.scheduler_state import get_interrupt
+from ai_workflow.runtime.graph.interrupt import WorkflowInterrupt
+from ai_workflow.runtime.graph.scheduler import get_interrupt
+from ai_workflow.runtime.persistence.checkpoint import InMemoryCheckpointer
 
 
 def _context() -> ExecutionContext:
@@ -61,7 +61,7 @@ async def test_human_approval_workflow_waits_then_resumes(
     repo_contracts_root,
     workflow_human_approval_definition: dict,
 ) -> None:
-    from ai_workflow.runtime.bootstrap import build_runner_registry
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     registry = build_runner_registry(repo_contracts_root)
     checkpointer = InMemoryCheckpointer()
@@ -108,7 +108,7 @@ async def test_resume_rejects_wrong_interrupt_id(
     repo_contracts_root,
     workflow_human_approval_definition: dict,
 ) -> None:
-    from ai_workflow.runtime.bootstrap import build_runner_registry
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     registry = build_runner_registry(repo_contracts_root)
     checkpointer = InMemoryCheckpointer()
@@ -149,8 +149,8 @@ async def test_waiting_survives_fresh_checkpointer_and_resume_only(
     repo_contracts_root,
     workflow_human_approval_definition: dict,
 ) -> None:
-    from ai_workflow.runtime.bootstrap import build_runner_registry
-    from ai_workflow.runtime.runner import continue_workflow_from_checkpoint
+    from ai_workflow.runtime.engine.engine import continue_workflow_from_checkpoint
+    from ai_workflow.runtime.registry.bootstrap import build_runner_registry
 
     registry = build_runner_registry(repo_contracts_root)
     checkpointer = InMemoryCheckpointer()

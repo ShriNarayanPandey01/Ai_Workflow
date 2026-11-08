@@ -78,23 +78,23 @@ services:
       AIW_FAKE_LLM: ${AIW_FAKE_LLM:-false}
       AIW_FAKE_IMAGE: ${AIW_FAKE_IMAGE:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      AIW_OPENAI_BASE_URL: ${AIW_OPENAI_BASE_URL:-https://api.openai.com/v1}
-      AIW_OPENAI_MODEL: ${AIW_OPENAI_MODEL:-gpt-4o-mini}
-      AIW_DEEPSEEK_API_KEY: ${AIW_DEEPSEEK_API_KEY:-${ZENMUX_API_KEY:-}}
       ZENMUX_API_KEY: ${ZENMUX_API_KEY:-}
       ZENMUSK_API_KEY: ${ZENMUSK_API_KEY:-}
-      AIW_DEEPSEEK_BASE_URL: ${AIW_DEEPSEEK_BASE_URL:-https://zenmux.ai/api/v1}
-      AIW_DEEPSEEK_MODEL: ${AIW_DEEPSEEK_MODEL:-deepseek/deepseek-v4-pro}
+      AIW_CHAT_BASE_URL: ${AIW_CHAT_BASE_URL:-https://zenmux.ai/api/v1}
+      AIW_DEEPSEEK_API_KEY: ${AIW_DEEPSEEK_API_KEY:-}
+      AIW_CHAT_ROUTING_PROVIDER: ${AIW_CHAT_ROUTING_PROVIDER:-zenmux}
+      AIW_CHAT_MODEL: ${AIW_CHAT_MODEL:-deepseek/deepseek-v4-pro}
+      AIW_IMAGE_GENERATION_MODEL: ${AIW_IMAGE_GENERATION_MODEL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      AIW_FAKE_EMBEDDINGS: ${AIW_FAKE_EMBEDDINGS:-false}
+      AIW_EMBEDDING_MODEL: ${AIW_EMBEDDING_MODEL:-gemini-embedding-001}
+      AIW_EMBEDDING_DIMENSIONS: ${AIW_EMBEDDING_DIMENSIONS:-1536}
       AIW_GEMINI_TEXT_MODEL: ${AIW_GEMINI_TEXT_MODEL:-gemini-3.5-flash}
-      AIW_IMAGE_PROVIDER: ${AIW_IMAGE_PROVIDER:-zenmusk}
-      AIW_GOOGLE_IMAGE_MODEL: ${AIW_GOOGLE_IMAGE_MODEL:-gemini-3.1-flash-lite-image}
-      AIW_OPENAI_IMAGE_MODEL: ${AIW_OPENAI_IMAGE_MODEL:-gpt-image-1}
-      AIW_ZENMUSK_IMAGE_MODEL: ${AIW_ZENMUSK_IMAGE_MODEL:-google/gemini-3.1-flash-image}
-      AIW_ZENMUSK_IMAGE_BASE_URL: ${AIW_ZENMUSK_IMAGE_BASE_URL:-https://zenmux.ai/api/vertex-ai}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AIW_ANTHROPIC_MODEL: ${AIW_ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      AIW_CONTROL_PLANE_INTERNAL_URL: ${AIW_CONTROL_PLANE_INTERNAL_URL:-http://control-plane:8080}
+      AIW_INTERNAL_AUTH_TOKEN: ${AIW_INTERNAL_AUTH_TOKEN:-development-only-jwt-secret-must-be-at-least-32-bytes}
       AIW_ARTIFACT_DIR: /app/artifacts
     volumes:
       - ./services/execution-engine/src:/app/src:ro
@@ -116,7 +116,17 @@ services:
       AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
       AIW_SERVICE_ROLE: task-worker
       AIW_CONTRACTS_ROOT: /contracts
-      AIW_FAKE_LLM: ${AIW_FAKE_LLM:-true}
+      AIW_FAKE_LLM: ${AIW_FAKE_LLM:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ZENMUX_API_KEY: ${ZENMUX_API_KEY:-}
+      ZENMUSK_API_KEY: ${ZENMUSK_API_KEY:-}
+      AIW_CHAT_BASE_URL: ${AIW_CHAT_BASE_URL:-https://zenmux.ai/api/v1}
+      AIW_CHAT_ROUTING_PROVIDER: ${AIW_CHAT_ROUTING_PROVIDER:-zenmux}
+      AIW_CHAT_MODEL: ${AIW_CHAT_MODEL:-deepseek/deepseek-v4-pro}
+      AIW_IMAGE_GENERATION_MODEL: ${AIW_IMAGE_GENERATION_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AIW_EMBEDDING_MODEL: ${AIW_EMBEDDING_MODEL:-gemini-embedding-001}
+      AIW_EMBEDDING_DIMENSIONS: ${AIW_EMBEDDING_DIMENSIONS:-1536}
       AIW_ARTIFACT_DIR: /app/artifacts
     volumes:
       - ./services/execution-engine/src:/app/src:ro
@@ -137,6 +147,11 @@ services:
       AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
       AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
       AIW_SERVICE_ROLE: execution-api
+      AIW_CONTRACTS_ROOT: /contracts
+    volumes:
+      - ./services/execution-engine/src:/app/src:ro
+      - ./services/execution-engine/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
     ports:
       - "8088:8080"
     depends_on:
@@ -154,10 +169,10 @@ services:
       AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
       AIW_SERVICE_ROLE: rag-worker
       AIW_CONTRACTS_ROOT: /contracts
-      AIW_FAKE_EMBEDDINGS: ${AIW_FAKE_EMBEDDINGS:-true}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      AIW_OPENAI_BASE_URL: ${AIW_OPENAI_BASE_URL:-https://api.openai.com/v1}
-      AIW_EMBEDDING_MODEL: ${AIW_EMBEDDING_MODEL:-text-embedding-3-small}
+      AIW_FAKE_EMBEDDINGS: ${AIW_FAKE_EMBEDDINGS:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AIW_EMBEDDING_MODEL: ${AIW_EMBEDDING_MODEL:-gemini-embedding-001}
+      AIW_EMBEDDING_DIMENSIONS: ${AIW_EMBEDDING_DIMENSIONS:-1536}
       AIW_CONTROL_PLANE_INTERNAL_URL: ${AIW_CONTROL_PLANE_INTERNAL_URL:-}
       AIW_INTERNAL_AUTH_TOKEN: ${AIW_INTERNAL_AUTH_TOKEN:-}
     volumes:
@@ -178,6 +193,11 @@ services:
       AIW_DATABASE_URL: postgresql://aiw:aiw@postgres:5432/aiw
       AIW_RABBITMQ_URL: amqp://aiw:aiw@rabbitmq:5672/
       AIW_SERVICE_ROLE: rag-api
+      AIW_CONTRACTS_ROOT: /contracts
+    volumes:
+      - ./services/rag/src:/app/src:ro
+      - ./services/rag/sql:/app/sql:ro
+      - ./contracts:/contracts:ro
     ports:
       - "8089:8080"
     depends_on:
@@ -198,16 +218,30 @@ services:
       - "9001:9001"
     volumes:
       - aiw-minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   minio-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         until mc alias set local http://minio:9000 aiw aiwsecret; do sleep 1; done
         mc mb -p local/aiw || true
+
+  web:
+    build:
+      context: ./apps/web
+    ports:
+      - "5173:80"
+    depends_on:
+      - control-plane
 
 volumes:
   aiw-postgres:

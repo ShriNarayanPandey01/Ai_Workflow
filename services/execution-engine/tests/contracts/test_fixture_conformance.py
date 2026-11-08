@@ -34,11 +34,8 @@ from ai_workflow.contracts.workflow.definition import (
     validate_definition_document,
     workflow_from_dict,
 )
-from ai_workflow.messaging.validation import (
-    EnvelopeValidationError,
-    validate_envelope_document,
-)
-from ai_workflow.runtime.semantic import (
+from ai_workflow.messaging.envelope import EnvelopeValidationError, EnvelopeValidator
+from ai_workflow.runtime.semantics.validator import (
     SemanticValidationError,
     validate_workflow_semantics,
 )
@@ -100,9 +97,7 @@ def test_valid_fixture_accepted(fixture_path: Path) -> None:
     kind = _route(fixture_path, _load_meta(fixture_path))
 
     if kind == "envelope":
-        validate_envelope_document(
-            document, contracts_root=CONTRACTS_ROOT, source=fixture_path.name
-        )
+        EnvelopeValidator(CONTRACTS_ROOT).validate(document, source=fixture_path.name)
     elif kind == "condition":
         _validate_condition(document)
     elif kind == "manifest":
@@ -132,8 +127,8 @@ def test_invalid_fixture_rejected(fixture_path: Path) -> None:
 
     if kind == "envelope":
         with pytest.raises(EnvelopeValidationError):
-            validate_envelope_document(
-                document, contracts_root=CONTRACTS_ROOT, source=fixture_path.name
+            EnvelopeValidator(CONTRACTS_ROOT).validate(
+                document, source=fixture_path.name
             )
         return
 

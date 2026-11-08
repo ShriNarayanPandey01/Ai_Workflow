@@ -68,15 +68,24 @@ class Settings(BaseSettings):
     contracts_root: Path = Field(default=DEFAULT_CONTRACTS_ROOT, alias="AIW_CONTRACTS_ROOT")
 
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
-    openai_base_url: str = Field(
-        default="https://api.openai.com/v1",
-        alias="AIW_OPENAI_BASE_URL",
+    zenmux_api_key: str | None = Field(default=None, alias="ZENMUX_API_KEY")
+    zenmusk_api_key: str | None = Field(default=None, alias="ZENMUSK_API_KEY")
+    deepseek_api_key: str | None = Field(default=None, alias="AIW_DEEPSEEK_API_KEY")
+    chat_base_url: str = Field(
+        default="https://zenmux.ai/api/v1",
+        alias="AIW_CHAT_BASE_URL",
     )
-    openai_model: str = Field(default="gpt-4o-mini", alias="AIW_OPENAI_MODEL")
+    chat_routing_provider: str = Field(default="zenmux", alias="AIW_CHAT_ROUTING_PROVIDER")
+    chat_model_id: str = Field(
+        default="deepseek/deepseek-v4-pro",
+        alias="AIW_CHAT_MODEL",
+    )
+    image_generation_model: str = Field(default="", alias="AIW_IMAGE_GENERATION_MODEL")
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     fake_llm: bool = Field(default=False, alias="AIW_FAKE_LLM")
     fake_embeddings: bool = Field(default=False, alias="AIW_FAKE_EMBEDDINGS")
     embedding_model: str = Field(
-        default="text-embedding-3-small",
+        default="gemini-embedding-001",
         alias="AIW_EMBEDDING_MODEL",
     )
     embedding_dimensions: int = Field(default=1536, alias="AIW_EMBEDDING_DIMENSIONS", ge=8)
@@ -103,13 +112,36 @@ class Settings(BaseSettings):
             return value
         return Path(str(value))
 
-    @field_validator("openai_api_key", mode="before")
+    @field_validator(
+        "openai_api_key",
+        "zenmux_api_key",
+        "zenmusk_api_key",
+        "deepseek_api_key",
+        "gemini_api_key",
+        mode="before",
+    )
     @classmethod
     def _empty_key_to_none(cls, value: object) -> object:
         if value is None:
             return None
         text = str(value).strip()
         return text or None
+
+    @property
+    def chat_api_key(self) -> str | None:
+        if self.chat_routing_provider.strip().lower() == "openai":
+            return self.openai_api_key
+        return self.zenmux_api_key or self.zenmusk_api_key or self.deepseek_api_key
+
+    @property
+    def chat_model(self) -> str:
+        model = self.chat_model_id.strip()
+        provider = self.chat_routing_provider.strip()
+        if "/" not in model and provider.lower() != "openai":
+            model = f"deepseek/{model}"
+        if provider.lower() not in {"", "openai", "zenmux", "deepseek"} and ":" not in model:
+            model = f"{model}:{provider}"
+        return model
 
     @field_validator(
         "control_plane_internal_url",

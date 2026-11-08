@@ -7,6 +7,8 @@
 
 Owns document ingest/delete: download → extract → chunk → embed → activate vectors in the `rag` PostgreSQL schema. Publishes `document.ingestion.*` events. Never exposed to browsers.
 
+Embeddings use Gemini `gemini-embedding-001` with 1536 dimensions. After changing an embedding model, re-ingest existing documents before retrieval: vectors from different models cannot be compared, even when they have the same dimension.
+
 Workflow retrieval (`rag.retrieve@1`) runs **in-process in execution-engine** against the same `rag` schema (read-only). A matching retrieve/read-side copy lives here for tests and future admin use — keep both copies in sync.
 
 ## Process roles
