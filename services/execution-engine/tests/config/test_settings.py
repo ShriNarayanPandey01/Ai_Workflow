@@ -118,25 +118,47 @@ def test_require_service_role_rejects_mismatch() -> None:
         require_service_role(settings, "execution-worker")
 
 
-def test_baseten_and_gemini_settings_and_fake_llm_coercion(
+def test_zenmux_and_gemini_settings_and_fake_llm_coercion(
     valid_env: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("BASETEN_API_KEY", "baseten-test")
+    for variable in ("ZENMUX_API_KEY", "AIW_DEEPSEEK_API_KEY"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("ZENMUSK_API_KEY", "zenmux-compatible-test")
     monkeypatch.setenv("AIW_CHAT_BASE_URL", "https://example.test/v1")
-    monkeypatch.setenv("AIW_CHAT_MODEL", "meta-models/muse-spark-open-1026")
+    monkeypatch.setenv("AIW_CHAT_ROUTING_PROVIDER", "example-provider")
+    monkeypatch.setenv("AIW_CHAT_MODEL", "deepseek-v4-pro")
+    monkeypatch.setenv("AIW_IMAGE_GENERATION_MODEL", "example/image-model")
     monkeypatch.setenv("GEMINI_API_KEY", "gemini-test")
     monkeypatch.setenv("AIW_FAKE_LLM", "false")
 
     settings = load_settings(env_file=None)
 
-    assert settings.baseten_api_key == "baseten-test"
+    assert settings.chat_api_key == "zenmux-compatible-test"
     assert settings.chat_base_url == "https://example.test/v1"
-    assert settings.chat_model == "meta-models/muse-spark-open-1026"
+    assert settings.chat_model == "deepseek/deepseek-v4-pro:example-provider"
+    assert settings.image_generation_model == "example/image-model"
     assert settings.gemini_api_key == "gemini-test"
     assert settings.embedding_model == "gemini-embedding-001"
     assert settings.embedding_dimensions == 1536
     assert settings.fake_llm is False
+
+
+def test_openai_chat_settings_select_openai_key_and_model(
+    valid_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-test-key")
+    monkeypatch.setenv("ZENMUX_API_KEY", "zenmux-test-key")
+    monkeypatch.setenv("AIW_CHAT_ROUTING_PROVIDER", "openai")
+    monkeypatch.setenv("AIW_CHAT_BASE_URL", "https://api.openai.com/v1")
+    monkeypatch.setenv("AIW_CHAT_MODEL", "gpt-6-astra")
+
+    settings = load_settings(env_file=None)
+
+    assert settings.chat_api_key == "openai-test-key"
+    assert settings.chat_base_url == "https://api.openai.com/v1"
+    assert settings.chat_model == "gpt-6-astra"
 
 
 def test_build_chat_provider_selection() -> None:

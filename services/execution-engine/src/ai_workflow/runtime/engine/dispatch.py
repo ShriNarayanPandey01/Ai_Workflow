@@ -221,6 +221,7 @@ class ForEachAfterHandler:
         try_enqueue: Callable[[str], None],
         checkpoint_state: Callable[..., Awaitable[None]],
         is_cancelled: Callable[[], Awaitable[str | None]],
+        is_paused: Callable[[], Awaitable[bool]] | None,
         deadline: datetime | None,
     ) -> str | None:
         return await self._foreach.after_control_node(
@@ -243,6 +244,7 @@ class ForEachAfterHandler:
             try_enqueue=try_enqueue,
             checkpoint_state=checkpoint_state,
             is_cancelled=is_cancelled,
+            is_paused=is_paused,
             deadline=deadline,
         )
 

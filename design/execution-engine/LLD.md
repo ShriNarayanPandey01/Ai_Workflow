@@ -35,7 +35,7 @@ src/ai_workflow/
 |-- rag/           # In-process vector retrieval against rag schema
 |-- security/      # Credential resolver, recursive redaction, SSRF validator
 |-- tasks/         # Durable task framework + heavy domain executors
-|-- providers/     # Baseten-compatible chat and Gemini embedding clients
+|-- providers/     # ZenMux-compatible chat and Gemini embedding clients
 `-- worker/        # execution_worker and task_worker process entrypoints
 ```
 

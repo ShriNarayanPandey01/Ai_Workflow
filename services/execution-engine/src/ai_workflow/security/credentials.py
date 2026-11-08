@@ -13,7 +13,7 @@ from ai_workflow.security.service_auth import ServiceAuthProvider
 # (POST /internal/v1/executions/{runId}/credentials:resolve). Secrets exist
 # only for the duration of resolve() plus the provider call.
 # EnvCredentialResolver is a local-dev fallback when no control-plane URL is
-# configured: it can supply only the provider slot from BASETEN_API_KEY.
+# configured: it can supply only the provider slot from a ZenMux-compatible key.
 
 
 class CredentialResolver(Protocol):
@@ -52,7 +52,7 @@ class StaticCredentialResolver:
 
 
 class EnvCredentialResolver:
-    """Dev fallback: BASETEN_API_KEY for the provider slot only."""
+    """Dev fallback: ZenMux-compatible API key for the provider slot only."""
 
     def __init__(self, api_key: str | None) -> None:
         self._api_key = api_key
@@ -144,7 +144,7 @@ def build_credential_resolver(
     """Choose HTTP (control-plane) or env fallback credential resolution.
 
     HTTP is used whenever ``control_plane_url`` is set. The env fallback only
-    covers slot ``provider`` from ``BASETEN_API_KEY`` for local fake/real LLM
+    covers slot ``provider`` from ZenMux-compatible key settings for local LLM
     without a control plane.
     """
     if control_plane_url:

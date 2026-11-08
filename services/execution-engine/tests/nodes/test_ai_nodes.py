@@ -63,6 +63,7 @@ async def test_chat_model_with_fake_provider() -> None:
     assert result.outputs["response"]["text"] == "ok"
     assert "usage" in result.outputs["response"]
     assert provider.calls[0].model == "gpt-test"
+    assert provider.calls[0].timeout_seconds == 240
 
 
 def test_retryable_status_classification() -> None:
@@ -73,8 +74,8 @@ def test_retryable_status_classification() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_baseten_compatible_retries_429_then_succeeds() -> None:
-    route = respx.post("https://inference.baseten.co/v1/chat/completions").mock(
+async def test_openai_compatible_retries_429_then_succeeds() -> None:
+    route = respx.post("https://api.openai.com/v1/chat/completions").mock(
         side_effect=[
             httpx.Response(429, json={"error": "rate limit"}),
             httpx.Response(
@@ -92,7 +93,7 @@ async def test_baseten_compatible_retries_429_then_succeeds() -> None:
     )
     provider = OpenAICompatibleChatProvider(
         api_key="test-key",
-        base_url="https://inference.baseten.co/v1",
+        base_url="https://api.openai.com/v1",
         max_attempts=3,
         initial_backoff_ms=1,
         max_backoff_ms=2,

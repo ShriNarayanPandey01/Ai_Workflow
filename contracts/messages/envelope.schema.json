@@ -81,6 +81,8 @@
         "execution.start",
         "execution.cancel",
         "execution.resume",
+        "execution.pause",
+        "execution.unpause",
         "document.ingest",
         "document.delete",
         "task.start",
@@ -88,6 +90,8 @@
         "execution.queued",
         "execution.started",
         "execution.waiting",
+        "execution.paused",
+        "execution.unpaused",
         "execution.completed",
         "execution.failed",
         "execution.cancelled",
@@ -249,6 +253,32 @@
     },
     {
       "if": {
+        "properties": { "message_type": { "const": "execution.pause" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/execution.pause.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.unpause" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "null" },
+          "payload": { "$ref": "commands/execution.unpause.schema.json" }
+        }
+      }
+    },
+    {
+      "if": {
         "properties": { "message_type": { "const": "document.ingest" } },
         "required": ["message_type"]
       },
@@ -341,6 +371,32 @@
           "payload": {
             "$ref": "events/execution.lifecycle.schema.json#/$defs/executionWaiting"
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.paused" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/execution.lifecycle.schema.json#/$defs/executionPaused" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "execution.unpaused" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": { "$ref": "#/$defs/executionSubject" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "payload": { "$ref": "events/execution.lifecycle.schema.json#/$defs/executionUnpaused" }
         }
       }
     },

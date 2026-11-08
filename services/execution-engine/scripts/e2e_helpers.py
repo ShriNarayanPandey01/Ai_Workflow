@@ -42,7 +42,7 @@ from ai_workflow.worker.task_worker import _handle_task_command
 
 logger = logging.getLogger(__name__)
 
-WAIT_TIMEOUT_SECONDS = 180.0
+WAIT_TIMEOUT_SECONDS = 300.0
 MOCK_CP_HOST = "127.0.0.1"
 LIVE_HTTP_URL_TEMPLATE = "https://httpbin.org/get?item={{item}}"
 
@@ -77,11 +77,11 @@ def require_real_llm(settings: Settings) -> str:
             "services/execution-engine/.env for a real AI run."
         )
         raise SystemExit(msg)
-    api_key = settings.baseten_api_key
+    api_key = settings.chat_api_key
     if not api_key:
         msg = (
-            "BASETEN_API_KEY is missing. Add it to services/execution-engine/.env "
-            "to call Muse Spark through Baseten."
+            "No chat API key is configured. Add OPENAI_API_KEY for OpenAI or a "
+            "ZenMux key to services/execution-engine/.env to run the live chat workflow."
         )
         raise SystemExit(msg)
     return api_key
@@ -133,7 +133,7 @@ def prepare_live_workflow(
     *,
     http_node_id: str,
     chat_node_id: str,
-    chat_model: str = "meta-models/muse-spark-open-1026",
+    chat_model: str = "deepseek/deepseek-v4-pro",
     http_url_template: str = LIVE_HTTP_URL_TEMPLATE,
     collect_node_id: str | None = None,
     artifact_threshold_bytes: int | None = 256,
@@ -794,7 +794,7 @@ async def setup_runtime(*, log_label: str = "e2e") -> E2ERuntime:
     credential_resolver = build_credential_resolver(
         control_plane_url=settings.control_plane_internal_url,
         internal_auth_token=settings.internal_auth_token,
-        chat_api_key=settings.baseten_api_key,
+        chat_api_key=settings.chat_api_key,
     )
     action_key_store = PostgresActionKeyStore(pool)
     registry = build_live_http_registry(

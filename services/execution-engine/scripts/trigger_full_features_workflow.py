@@ -23,8 +23,8 @@ Prerequisites (from repo root):
     docker compose up -d postgres rabbitmq
     docker compose stop execution-worker task-worker
 
-Requires BASETEN_API_KEY in services/execution-engine/.env (AIW_FAKE_LLM must
-not be true).
+Requires OPENAI_API_KEY (or a ZenMux API key) in services/execution-engine/.env
+(AIW_FAKE_LLM must not be true).
 
 Usage:
     cd services/execution-engine

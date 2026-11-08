@@ -64,12 +64,12 @@ describe("newNode", () => {
       ...manifest("ai.chat-model@1", [], []),
       config_schema: {
         type: "object",
-        properties: { model: { type: "string", default: "meta-models/muse-spark-open-1026" } },
+        properties: { model: { type: "string", default: "deepseek/deepseek-v4-pro" } },
       },
     }
 
     expect(newNode(chatManifest.type, { x: 0, y: 0 }, chatManifest).config).toEqual({
-      model: "meta-models/muse-spark-open-1026",
+      model: "deepseek/deepseek-v4-pro",
     })
   })
 })

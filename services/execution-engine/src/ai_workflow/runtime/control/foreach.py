@@ -23,6 +23,14 @@ from ai_workflow.runtime.semantics.validator import build_state_root
 ItemStatus = Literal["pending", "success", "failure", "skipped"]
 
 
+class ForEachPaused(Exception):
+    """An item stopped at a node boundary for a manual pause."""
+
+
+class ForEachControlError(RuntimeError):
+    """Pause observation or checkpointing failed and must not fail an item."""
+
+
 @dataclass
 class ForEachFrame:
     """Tracks per-item subflow execution for one control.for-each@1 node."""
@@ -35,6 +43,8 @@ class ForEachFrame:
     item_status: dict[str, ItemStatus] = field(default_factory=dict)
     item_results: dict[str, JsonValue] = field(default_factory=dict)
     item_errors: dict[str, str] = field(default_factory=dict)
+    item_outputs: dict[str, dict[str, dict[str, JsonValue]]] = field(default_factory=dict)
+    item_positions: dict[str, int] = field(default_factory=dict)
     completion_seq: dict[str, int] = field(default_factory=dict)
     next_completion_seq: int = 0
     concurrency: int = 1
@@ -53,6 +63,8 @@ class ForEachFrame:
             "item_status": dict(self.item_status),
             "item_results": dict(self.item_results),
             "item_errors": dict(self.item_errors),
+            "item_outputs": self.item_outputs,
+            "item_positions": dict(self.item_positions),
             "completion_seq": {k: v for k, v in self.completion_seq.items()},
             "next_completion_seq": self.next_completion_seq,
             "concurrency": self.concurrency,
@@ -69,6 +81,8 @@ class ForEachFrame:
         item_status_raw = raw.get("item_status", {})
         item_results_raw = raw.get("item_results", {})
         item_errors_raw = raw.get("item_errors", {})
+        item_outputs_raw = raw.get("item_outputs", {})
+        item_positions_raw = raw.get("item_positions", {})
         completion_seq_raw = raw.get("completion_seq", {})
         return cls(
             for_each_node_id=str(raw["for_each_node_id"]),
@@ -95,6 +109,18 @@ class ForEachFrame:
                 for k, v in item_errors_raw.items()
                 if isinstance(item_errors_raw, dict)
             },
+            item_outputs={
+                str(item_key): {
+                    str(node_id): dict(outputs)
+                    for node_id, outputs in nodes.items()
+                    if isinstance(outputs, dict)
+                }
+                for item_key, nodes in item_outputs_raw.items()
+                if isinstance(item_outputs_raw, dict) and isinstance(nodes, dict)
+            } if isinstance(item_outputs_raw, dict) else {},
+            item_positions={
+                str(k): v for k, v in item_positions_raw.items() if isinstance(v, int)
+            } if isinstance(item_positions_raw, dict) else {},
             completion_seq={
                 str(k): int(v)
                 for k, v in completion_seq_raw.items()
@@ -283,17 +309,24 @@ async def _execute_item_body(
     credential_resolver: object | None,
     invoker: NodeInvoker,
     cancel_check: Callable[[], bool] | None = None,
+    is_paused: Callable[[], Awaitable[bool]] | None = None,
+    on_node_complete: Callable[
+        [str, int, dict[str, dict[str, JsonValue]]], Awaitable[None]
+    ] | None = None,
     deadline: datetime | None = None,
 ) -> JsonValue:
     item_key = str(envelope["item_key"])
-    item_outputs: dict[str, dict[str, JsonValue]] = {}
+    item_outputs = dict(frame.item_outputs.get(item_key, {}))
     item_outputs[frame.for_each_node_id] = {"item": envelope}
 
     nodes_by_id = workflow.node_by_id()
     order = _body_topo_order(workflow, frame.body_node_ids, frame.body_entry_ids)
     retry_policy = workflow.execution_policy.default_retry
 
-    for body_node_id in order:
+    start_position = frame.item_positions.get(item_key, 0)
+    for position, body_node_id in enumerate(order[start_position:], start=start_position):
+        if is_paused is not None and await is_paused():
+            raise ForEachPaused()
         node = nodes_by_id[body_node_id]
         registration = registry.get_node(node.type)
         bindings = bindings_for_node(node, workflow.incoming_edges(node.id))
@@ -343,6 +376,8 @@ async def _execute_item_body(
             retry=retry_policy,
         )
         item_outputs[body_node_id] = dict(result.outputs)
+        if on_node_complete is not None:
+            await on_node_complete(item_key, position + 1, item_outputs)
 
     sinks = _body_sink_nodes(workflow, frame.body_node_ids)
     if not sinks:
@@ -373,6 +408,7 @@ async def run_foreach_frame(
     invoker: NodeInvoker | None = None,
     cancel_check: asyncio.Event | None = None,
     on_item_complete: Callable[[ForEachFrame], Awaitable[None]] | None = None,
+    is_paused: Callable[[], Awaitable[bool]] | None = None,
     deadline: datetime | None = None,
 ) -> ForEachFrame:
     """Execute pending items in a for-each frame with bounded concurrency.
@@ -397,6 +433,26 @@ async def run_foreach_frame(
         frame.next_completion_seq += 1
         frame.completion_seq[item_key] = frame.next_completion_seq
 
+    async def record_node(
+        item_key: str, position: int, outputs: dict[str, dict[str, JsonValue]]
+    ) -> None:
+        async with lock:
+            frame.item_outputs[item_key] = dict(outputs)
+            frame.item_positions[item_key] = position
+            if on_item_complete is not None:
+                try:
+                    await on_item_complete(frame)
+                except Exception as exc:
+                    raise ForEachControlError("Failed to checkpoint item progress") from exc
+
+    async def check_paused() -> bool:
+        if is_paused is None:
+            return False
+        try:
+            return await is_paused()
+        except Exception as exc:
+            raise ForEachControlError("Failed to read pause state") from exc
+
     async def run_one(envelope: dict[str, JsonValue]) -> None:
         item_key = str(envelope["item_key"])
         if frame.item_status.get(item_key) not in (None, "pending"):
@@ -409,6 +465,8 @@ async def run_foreach_frame(
             return
 
         async with semaphore:
+            if await check_paused():
+                return
             if fail_fast_triggered.is_set():
                 async with lock:
                     await _mark(item_key, "skipped")
@@ -440,6 +498,8 @@ async def run_foreach_frame(
                             if cancel_check is not None
                             else None
                         ),
+                        is_paused=check_paused if is_paused is not None else None,
+                        on_node_complete=record_node if is_paused is not None else None,
                         deadline=deadline,
                     ),
                     timeout=frame.item_timeout_seconds,
@@ -449,6 +509,10 @@ async def run_foreach_frame(
                     await _mark(item_key, "success")
                     if on_item_complete is not None:
                         await on_item_complete(frame)
+            except ForEachPaused:
+                return
+            except ForEachControlError:
+                raise
             except Exception as exc:
                 async with lock:
                     frame.item_errors[item_key] = str(exc)
@@ -465,7 +529,13 @@ async def run_foreach_frame(
     ]
     tasks = [asyncio.create_task(run_one(envelope)) for envelope in pending]
     if tasks:
-        await asyncio.gather(*tasks)
+        try:
+            await asyncio.gather(*tasks)
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
     if frame.failure_policy == "fail_fast" and fail_fast_triggered.is_set():
         for envelope in frame.envelopes:
@@ -473,8 +543,12 @@ async def run_foreach_frame(
             if frame.item_status.get(item_key, "pending") == "pending":
                 await _mark(item_key, "skipped")
 
-    frame.completed = True
-    state.inject_collect_items(frame.collect_node_id, frame.collect_items())
+    frame.completed = not any(
+        frame.item_status.get(str(envelope.get("item_key", "")), "pending") == "pending"
+        for envelope in frame.envelopes
+    )
+    if frame.completed:
+        state.inject_collect_items(frame.collect_node_id, frame.collect_items())
     return frame
 
 
@@ -559,6 +633,7 @@ class ForEachRuntime:
         try_enqueue: Callable[[str], None],
         checkpoint_state: Callable[..., Awaitable[None]],
         is_cancelled: Callable[[], Awaitable[str | None]],
+        is_paused: Callable[[], Awaitable[bool]] | None = None,
         existing_frame: ForEachFrame | None = None,
         deadline: datetime | None = None,
     ) -> str | None:
@@ -609,6 +684,7 @@ class ForEachRuntime:
             invoker=self._invoker,
             cancel_check=event,
             on_item_complete=_persist_frame_progress,
+            is_paused=is_paused,
             deadline=deadline,
         )
 
@@ -624,7 +700,8 @@ class ForEachRuntime:
         cancel_reason = await is_cancelled()
         if cancel_reason is not None:
             return cancel_reason
-        try_enqueue(frame.collect_node_id)
+        if frame.completed:
+            try_enqueue(frame.collect_node_id)
         return None
 
     async def resume_incomplete(
@@ -647,10 +724,13 @@ class ForEachRuntime:
         try_enqueue: Callable[[str], None],
         checkpoint_state: Callable[..., Awaitable[None]],
         is_cancelled: Callable[[], Awaitable[str | None]],
+        is_paused: Callable[[], Awaitable[bool]] | None = None,
         deadline: datetime | None = None,
     ) -> str | None:
         frames = load_foreach_frames(state)
         for node in workflow.nodes:
+            if is_paused is not None and await is_paused():
+                break
             if node.type != "control.for-each@1":
                 continue
             node_id = str(node.id)
@@ -682,6 +762,7 @@ class ForEachRuntime:
                 try_enqueue=try_enqueue,
                 checkpoint_state=checkpoint_state,
                 is_cancelled=is_cancelled,
+                is_paused=is_paused,
                 existing_frame=existing,
                 deadline=deadline,
             )

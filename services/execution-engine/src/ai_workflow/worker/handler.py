@@ -31,6 +31,7 @@ from ai_workflow.runtime.engine.engine import (
     WorkflowRunCancelled,
     WorkflowRunCompleted,
     WorkflowRunError,
+    WorkflowRunPaused,
     WorkflowRunTimedOut,
     WorkflowRunWaiting,
     continue_workflow_from_checkpoint,
@@ -90,9 +91,11 @@ def _parse_envelope(body: bytes) -> dict[str, Any]:
 
 async def _publish_outcome(
     publisher: EventPublisher,
-    outcome: WorkflowRunCompleted | WorkflowRunWaiting | WorkflowRunCancelled,
+    outcome: WorkflowRunCompleted | WorkflowRunWaiting | WorkflowRunCancelled | WorkflowRunPaused,
 ) -> None:
     """Publish the terminal or waiting event that matches a workflow run outcome."""
+    if isinstance(outcome, WorkflowRunPaused):
+        raise RuntimeError("Manual pause outcomes are not yet wired to worker events")
     if isinstance(outcome, WorkflowRunWaiting):
         await publisher.publish_execution_waiting(
             waiting_reason=outcome.waiting_reason,
@@ -152,7 +155,7 @@ class ExecutionCommandHandler:
             self._credential_resolver = build_credential_resolver(
                 control_plane_url=settings.control_plane_internal_url,
                 internal_auth_token=settings.internal_auth_token,
-                chat_api_key=settings.baseten_api_key,
+                chat_api_key=settings.chat_api_key,
             )
 
     async def aclose(self) -> None:

@@ -66,6 +66,14 @@ class ExecutionCancelPayload(BaseModel):
     requested_by: UUID | None = None
 
 
+class ExecutionPauseControlPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pause_id: UUID
+    revision: int
+    requested_by: UUID
+
+
 class MessageEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

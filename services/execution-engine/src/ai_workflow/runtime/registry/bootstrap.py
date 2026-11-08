@@ -65,7 +65,7 @@ def build_runner_registry(
     elif settings is not None:
         provider = build_chat_provider(
             fake_llm=settings.fake_llm,
-            api_key=settings.baseten_api_key,
+            api_key=settings.chat_api_key,
             base_url=settings.chat_base_url,
         )
     else:
@@ -76,7 +76,7 @@ def build_runner_registry(
         resolver = build_credential_resolver(
             control_plane_url=settings.control_plane_internal_url,
             internal_auth_token=settings.internal_auth_token,
-            chat_api_key=settings.baseten_api_key,
+            chat_api_key=settings.chat_api_key,
         )
     if resolver is None:
         resolver = StaticCredentialResolver({})
@@ -138,7 +138,7 @@ def build_runner_registry(
             credential_resolver=resolver,
             default_base_url=settings.chat_base_url
             if settings is not None
-            else "https://inference.baseten.co/v1",
+            else "https://zenmux.ai/api/v1",
         ),
         node_type="ai.chat-model@1",
     )

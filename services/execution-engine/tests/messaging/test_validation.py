@@ -51,3 +51,16 @@ def test_validate_rejects_command_with_sequence(
     }
     with pytest.raises(EnvelopeValidationError):
         EnvelopeValidator(repo_contracts_root).validate(document)
+
+
+@pytest.mark.parametrize("name", ["pause", "unpause", "paused"])
+def test_pause_messages_validate_and_reject_invalid_revisions(
+    repo_contracts_root: Path, name: str
+) -> None:
+    fixture = repo_contracts_root / "fixtures" / "valid" / f"envelope-execution-{name}.json"
+    document = json.loads(fixture.read_text(encoding="utf-8"))
+    validator = EnvelopeValidator(repo_contracts_root)
+    validator.validate(document)
+    document["payload"]["revision"] = 0
+    with pytest.raises(EnvelopeValidationError):
+        validator.validate(document)

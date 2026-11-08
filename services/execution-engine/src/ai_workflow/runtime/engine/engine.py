@@ -18,7 +18,7 @@ from ai_workflow.contracts.workflow.definition import (
 )
 from ai_workflow.nodes.base import TransientNodeError
 from ai_workflow.runtime.cancel import CancelRegistry
-from ai_workflow.runtime.control.foreach import ForEachRuntime
+from ai_workflow.runtime.control.foreach import ForEachControlError, ForEachRuntime
 from ai_workflow.runtime.engine.dispatch import (
     CollectInjectHandler,
     DurableTaskHandler,
@@ -39,6 +39,7 @@ from ai_workflow.runtime.graph.scheduler import (
     save_scheduler,
 )
 from ai_workflow.runtime.graph.state import WorkflowState
+from ai_workflow.runtime.pause import PauseRegistry
 from ai_workflow.runtime.persistence.checkpoint import (
     DEFINITION_HASH_KEY,
     Checkpointer,
@@ -134,7 +135,21 @@ class WorkflowRunCancelled:
     state: WorkflowState
 
 
-WorkflowRunOutcome = WorkflowRunCompleted | WorkflowRunWaiting | WorkflowRunCancelled
+@dataclass(frozen=True, slots=True)
+class WorkflowRunPaused:
+    """Workflow stopped at a checkpoint in response to a manual pause."""
+
+    run_id: UUID
+    pause_id: UUID
+    revision: int
+    state: WorkflowState
+
+
+WorkflowRunOutcome = (
+    WorkflowRunCompleted | WorkflowRunWaiting | WorkflowRunCancelled | WorkflowRunPaused
+)
+
+_MANUAL_PAUSE_KEY = "_manual_pause"
 
 # Backward-compatible alias used by existing tests.
 WorkflowRunResult = WorkflowRunCompleted
@@ -316,6 +331,7 @@ async def _execute_loop(
     max_node_executions: int,
     max_payload_bytes: int,
     cancel_registry: CancelRegistry | None,
+    pause_registry: PauseRegistry | None,
     credential_resolver: CredentialResolver | None,
     workspace_id: UUID | None = None,
     project_id: UUID | None = None,
@@ -357,6 +373,30 @@ async def _execute_loop(
         request = await cancel_registry.is_cancelled(run_id)
         return request.reason if request is not None else None
 
+    async def pause_if_requested() -> WorkflowRunPaused | None:
+        if pause_registry is None:
+            return None
+        request = await pause_registry.get(run_id)
+        if request is None or not request.requested:
+            return None
+        state.runtime[_MANUAL_PAUSE_KEY] = {
+            "pause_id": str(request.pause_id),
+            "revision": request.revision,
+            "paused_at": datetime.now(UTC).isoformat(),
+        }
+        await _checkpoint_state(
+            checkpointer=checkpointer,
+            run_id=run_id,
+            state=state,
+            scheduler=scheduler,
+            max_payload_bytes=max_payload_bytes,
+        )
+        return WorkflowRunPaused(run_id, request.pause_id, request.revision, state)
+
+    async def is_paused() -> bool:
+        request = await pause_registry.get(run_id) if pause_registry is not None else None
+        return request is not None and request.requested
+
     resolved_workspace_id, resolved_project_id = _resolve_scope_ids(
         workflow=workflow,
         state=state,
@@ -371,6 +411,13 @@ async def _execute_loop(
     durable_handler = DurableTaskHandler()
     inline_handler = InlineNodeHandler(invoker, validator)
     foreach_handler = ForEachAfterHandler(foreach)
+
+    cancel_reason = await is_cancelled()
+    if cancel_reason is not None:
+        return WorkflowRunCancelled(run_id=run_id, reason=cancel_reason, state=state)
+    paused = await pause_if_requested()
+    if paused is not None:
+        return paused
 
     cancel_reason = await foreach.resume_incomplete(
         workflow=workflow,
@@ -393,10 +440,14 @@ async def _execute_loop(
         try_enqueue=try_enqueue,
         checkpoint_state=_checkpoint_state,
         is_cancelled=is_cancelled,
+        is_paused=is_paused if pause_registry is not None else None,
         deadline=deadline,
     )
     if cancel_reason is not None:
         return WorkflowRunCancelled(run_id=run_id, reason=cancel_reason, state=state)
+    paused = await pause_if_requested()
+    if paused is not None:
+        return paused
 
     while scheduler.pending:
         cancel_reason = await is_cancelled()
@@ -409,6 +460,10 @@ async def _execute_loop(
                 max_payload_bytes=max_payload_bytes,
             )
             return WorkflowRunCancelled(run_id=run_id, reason=cancel_reason, state=state)
+
+        paused = await pause_if_requested()
+        if paused is not None:
+            return paused
 
         node_id = scheduler.dequeue()
         if node_id is None:
@@ -611,8 +666,11 @@ async def _execute_loop(
                     try_enqueue=try_enqueue,
                     checkpoint_state=_checkpoint_state,
                     is_cancelled=is_cancelled,
+                    is_paused=is_paused if pause_registry is not None else None,
                     deadline=deadline,
                 )
+            except ForEachControlError:
+                raise
             except Exception as exc:
                 msg = f"For-each subflow failed for node {node.id}: {exc}"
                 if hooks is not None:
@@ -624,6 +682,9 @@ async def _execute_loop(
                 return WorkflowRunCancelled(
                     run_id=run_id, reason=cancel_reason, state=state
                 )
+            paused = await pause_if_requested()
+            if paused is not None:
+                return paused
 
     if len(scheduler.executed_output_ids) != 1:
         msg = (
@@ -682,6 +743,7 @@ async def run_workflow(
     max_parallel_nodes_cap: int = 32,
     max_run_seconds: int = 300,
     cancel_registry: CancelRegistry | None = None,
+    pause_registry: PauseRegistry | None = None,
     credential_resolver: CredentialResolver | None = None,
     workspace_id: UUID | None = None,
     project_id: UUID | None = None,
@@ -776,6 +838,7 @@ async def run_workflow(
         max_node_executions=max_node_executions,
         max_payload_bytes=max_payload_bytes,
         cancel_registry=cancel_registry,
+        pause_registry=pause_registry,
         credential_resolver=credential_resolver,
         workspace_id=workspace_id,
         project_id=project_id,
@@ -802,6 +865,7 @@ async def continue_workflow_from_checkpoint(
     max_node_executions_cap: int = 10_000,
     max_parallel_nodes_cap: int = 32,
     cancel_registry: CancelRegistry | None = None,
+    pause_registry: PauseRegistry | None = None,
     credential_resolver: CredentialResolver | None = None,
     task_dispatcher: TaskDispatcher | None = None,
     definition_store: DefinitionStore | None = None,
@@ -841,6 +905,37 @@ async def continue_workflow_from_checkpoint(
         msg = f"Checkpoint for run_id={run_id} has no scheduler state"
         raise WorkflowRunError(msg)
 
+    manual_pause = state.runtime.get(_MANUAL_PAUSE_KEY)
+    if isinstance(manual_pause, dict):
+        current = await pause_registry.get(run_id) if pause_registry is not None else None
+        pause_id = manual_pause.get("pause_id")
+        revision = manual_pause.get("revision")
+        if (
+            current is None
+            or current.requested
+            or str(current.pause_id) != pause_id
+            or not isinstance(revision, int)
+            or current.revision <= revision
+        ):
+            raise WorkflowRunError("Run is manually paused")
+        paused_at = manual_pause.get("paused_at")
+        raw_deadline = state.runtime.get(RuntimeKeys.DEADLINE)
+        if isinstance(paused_at, str) and isinstance(raw_deadline, str):
+            paused_duration = max(
+                datetime.now(UTC) - datetime.fromisoformat(paused_at), timedelta()
+            )
+            state.runtime[RuntimeKeys.DEADLINE] = (
+                datetime.fromisoformat(raw_deadline) + paused_duration
+            ).isoformat()
+        del state.runtime[_MANUAL_PAUSE_KEY]
+        await _checkpoint_state(
+            checkpointer=checkpointer,
+            run_id=run_id,
+            state=state,
+            scheduler=scheduler,
+            max_payload_bytes=max_payload_bytes,
+        )
+
     ir = get_workflow_ir(workflow)
     await _persist_canonical_definition(definition_store, workflow)
     raw_deadline = state.runtime.get(RuntimeKeys.DEADLINE)
@@ -868,6 +963,7 @@ async def continue_workflow_from_checkpoint(
         ),
         max_payload_bytes=max_payload_bytes,
         cancel_registry=cancel_registry,
+        pause_registry=pause_registry,
         credential_resolver=credential_resolver,
         workspace_id=workspace_id,
         project_id=project_id,
@@ -899,6 +995,7 @@ async def resume_workflow(
     max_node_executions_cap: int = 10_000,
     max_parallel_nodes_cap: int = 32,
     cancel_registry: CancelRegistry | None = None,
+    pause_registry: PauseRegistry | None = None,
     credential_resolver: CredentialResolver | None = None,
     task_dispatcher: TaskDispatcher | None = None,
     definition_store: DefinitionStore | None = None,
@@ -1000,6 +1097,7 @@ async def resume_workflow(
         ),
         max_payload_bytes=max_payload_bytes,
         cancel_registry=cancel_registry,
+        pause_registry=pause_registry,
         credential_resolver=credential_resolver,
         task_dispatcher=task_dispatcher,
         max_parallel_nodes=min(

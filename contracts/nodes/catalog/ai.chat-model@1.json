@@ -53,7 +53,7 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 128,
-        "default": "meta-models/muse-spark-open-1026"
+        "default": "deepseek/deepseek-v4-pro"
       },
       "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
       "max_output_tokens": { "type": "integer", "minimum": 1, "maximum": 128000 },
