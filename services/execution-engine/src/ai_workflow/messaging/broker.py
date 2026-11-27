@@ -98,11 +98,20 @@ class RabbitBroker:
         name: str,
     ) -> aio_pika.abc.AbstractQueue:
         """Declare a durable work queue with the same DLQ args as topology."""
-        return await channel.declare_queue(
-            name,
-            durable=True,
-            arguments=self._durable_queue_arguments(),
-        )
+        try:
+            return await channel.declare_queue(
+                name,
+                durable=True,
+                arguments=self._durable_queue_arguments(),
+            )
+        except aio_pika.exceptions.ChannelPreconditionFailed:
+            logger.warning(
+                "Queue %s already exists with different arguments; reusing existing queue",
+                name,
+            )
+            if hasattr(channel, "reopen"):
+                await channel.reopen()
+            return await channel.declare_queue(name, passive=True)
 
     async def declare_topology(self, channel: aio_pika.abc.AbstractChannel) -> None:
         names = self._names
@@ -135,9 +144,8 @@ class RabbitBroker:
         task_results = await self.declare_durable_queue(channel, names.TASK_RESULTS_QUEUE)
         await task_results.bind(events_exchange, routing_key="task.#")
 
-        control_events_queue = await channel.declare_queue(
-            names.CONTROL_EVENTS_QUEUE,
-            durable=True,
+        control_events_queue = await self.declare_durable_queue(
+            channel, names.CONTROL_EVENTS_QUEUE
         )
         await control_events_queue.bind(
             events_exchange, routing_key=names.CONTROL_EVENTS_BINDING

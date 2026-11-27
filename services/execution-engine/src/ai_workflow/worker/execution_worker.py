@@ -54,7 +54,7 @@ async def _handle_message(
 
 async def run_worker() -> None:
     """Boot the execution worker and consume workflow command messages."""
-    settings = load_settings()
+    settings = load_settings() 
     require_service_role(settings, "execution-worker")
     logging.basicConfig(level=settings.log_level)
 
@@ -69,7 +69,6 @@ async def run_worker() -> None:
         logger.info("Applied migrations: %s", ", ".join(applied), extra=extra)
 
     cancel_registry = CancelRegistry(pool)
-    # IGNORE THIS COMMENT: can we have a pause registry as well for pausing workflows?
     broker = RabbitBroker()
     connection = await broker.connect(settings.rabbitmq_url, role=_ROLE)
     channel = await connection.channel()

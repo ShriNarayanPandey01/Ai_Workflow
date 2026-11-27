@@ -112,7 +112,8 @@ class DurableTaskHandler:
             waiting_reason="TASK",
             state=state,
             node_id=node.id,
-            approval_request={"task_id": str(task_id), "task_type": node.type},
+            approval_request=None,
+            task_ref={"task_id": str(task_id), "task_type": node.type},
         )
 
 

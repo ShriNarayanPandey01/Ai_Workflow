@@ -29,32 +29,33 @@ public class RabbitTopologyConfig {
         return new TopicExchange(MessagingNames.DEAD_LETTER_EXCHANGE, true, false);
     }
 
+    private Queue durableQueue(String name) {
+        Queue queue = QueueBuilder.durable(name)
+                .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", "rejected")
+                .build();
+        queue.setIgnoreDeclarationExceptions(true);
+        return queue;
+    }
+
     @Bean
     Queue executionCommandsQueue() {
-        return QueueBuilder.durable(MessagingNames.EXECUTION_COMMANDS_QUEUE)
-                .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
-                .build();
+        return durableQueue(MessagingNames.EXECUTION_COMMANDS_QUEUE);
     }
 
     @Bean
     Queue ingestionCommandsQueue() {
-        return QueueBuilder.durable(MessagingNames.INGESTION_COMMANDS_QUEUE)
-                .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
-                .build();
+        return durableQueue(MessagingNames.INGESTION_COMMANDS_QUEUE);
     }
 
     @Bean
     Queue taskCommandsQueue() {
-        return QueueBuilder.durable(MessagingNames.TASK_COMMANDS_QUEUE)
-                .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
-                .build();
+        return durableQueue(MessagingNames.TASK_COMMANDS_QUEUE);
     }
 
     @Bean
     Queue controlEventsQueue() {
-        return QueueBuilder.durable(MessagingNames.CONTROL_EVENTS_QUEUE)
-                .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
-                .build();
+        return durableQueue(MessagingNames.CONTROL_EVENTS_QUEUE);
     }
 
     @Bean

@@ -124,6 +124,7 @@ class WorkflowRunWaiting:
     node_id: UUID
     approval_request: dict[str, JsonValue] | None
     approval_id: UUID | None = None
+    task_ref: dict[str, JsonValue] | None = None
 
 
 @dataclass(frozen=True, slots=True)

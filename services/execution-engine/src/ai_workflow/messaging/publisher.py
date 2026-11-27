@@ -78,6 +78,7 @@ class EventPublisher:
         routing_key: str,
         payload: dict[str, JsonValue],
         idempotency_suffix: str,
+        node_id: UUID | None = None,
     ) -> int:
         """Build, redact, and publish a contract envelope to the events exchange."""
         sequence = await self.allocate_sequence()
@@ -88,7 +89,7 @@ class EventPublisher:
             causation_id=self._source.message_id,
             idempotency_key=f"{idempotency_suffix}:{self._subject.run_id}:{sequence}",
             tenant=self._source.tenant,
-            subject=self._subject_dict,
+            subject={**self._subject_dict, "node_id": str(node_id) if node_id else None},
             sequence=sequence,
             payload=redact_value(payload),
         )
@@ -151,6 +152,7 @@ class EventPublisher:
         node_id: UUID | None = None,
         approval_request: dict[str, JsonValue] | None = None,
         approval_id: UUID | None = None,
+        task_ref: dict[str, JsonValue] | None = None,
     ) -> int:
         payload: dict[str, JsonValue] = {
             "status": "WAITING",
@@ -165,6 +167,8 @@ class EventPublisher:
             payload["approval_request"] = approval_request
         else:
             payload["approval_request"] = None
+        if task_ref is not None:
+            payload["task_ref"] = task_ref
         return await self.publish(
             message_type="execution.waiting",
             routing_key=self._names.EXECUTION_WAITING_ROUTING_KEY,
@@ -187,6 +191,7 @@ class EventPublisher:
     async def publish_node_started(self, *, node_id: UUID, node_type: str, attempt: int = 1) -> int:
         return await self.publish(
             message_type="node.started",
+            node_id=node_id,
             routing_key=self._names.NODE_STARTED_ROUTING_KEY,
             payload={
                 "node_id": str(node_id),
@@ -208,6 +213,7 @@ class EventPublisher:
     ) -> int:
         return await self.publish(
             message_type="node.completed",
+            node_id=node_id,
             routing_key=self._names.NODE_COMPLETED_ROUTING_KEY,
             payload={
                 "node_id": str(node_id),
@@ -230,6 +236,7 @@ class EventPublisher:
     ) -> int:
         return await self.publish(
             message_type="node.failed",
+            node_id=node_id,
             routing_key=self._names.NODE_FAILED_ROUTING_KEY,
             payload={
                 "node_id": str(node_id),

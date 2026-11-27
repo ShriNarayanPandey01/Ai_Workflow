@@ -13,9 +13,9 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-async def db_pool():
+async def db_pool(integration_database_url):
     try:
-        pool = await create_pool("postgresql://aiw:aiw@localhost:5432/aiw")
+        pool = await create_pool(integration_database_url)
         await run_migrations(pool, SERVICE_ROOT / "sql")
     except (OSError, asyncpg.PostgresError) as exc:
         pytest.skip(f"Postgres unavailable: {exc}")

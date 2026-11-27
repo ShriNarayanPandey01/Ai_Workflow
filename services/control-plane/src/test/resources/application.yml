@@ -5,10 +5,12 @@ spring:
   quartz:
     job-store-type: memory
     auto-startup: false
-    properties:
-      org.quartz.jobStore.isClustered: false
 
 aiw:
+  auth:
+    rate-limit-per-minute: 20
+  limits:
+    max-graph-nodes: 500
   jwt:
     secret: development-only-jwt-secret-must-be-at-least-32-bytes
   refresh:
@@ -31,6 +33,8 @@ management:
       enabled: false
   endpoint:
     health:
+      probes:
+        enabled: true
       group:
         readiness:
           include: readinessState,db
