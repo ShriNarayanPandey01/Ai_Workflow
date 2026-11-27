@@ -17,6 +17,7 @@ class RabbitTopologyConfigTest {
             assertThat(queue.getArguments())
                     .containsEntry("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
                     .containsEntry("x-dead-letter-routing-key", "rejected");
+            assertThat(queue.isIgnoreDeclarationExceptions()).isTrue();
         }
     }
 }

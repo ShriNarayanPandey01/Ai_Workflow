@@ -68,8 +68,7 @@ async def run_worker() -> None:
     if applied:
         logger.info("Applied migrations: %s", ", ".join(applied), extra=extra)
 
-    cancel_registry = CancelRegistry(pool) # question can we force stop everything going on if something is cancel even durable task forecefully close them 
-    # IGNORE THIS COMMENT: can we have a pause registry as well for pausing workflows?
+    cancel_registry = CancelRegistry(pool)
     broker = RabbitBroker()
     connection = await broker.connect(settings.rabbitmq_url, role=_ROLE)
     channel = await connection.channel()
