@@ -8,7 +8,7 @@ import aio_pika
 from ai_workflow_rag.config.settings import SERVICE_ROOT, load_settings
 from ai_workflow_rag.db import create_pool, run_migrations
 from ai_workflow_rag.messaging import constants as mq
-from ai_workflow_rag.messaging.topology import declare_topology
+from ai_workflow_rag.messaging.topology import declare_ingestion_queue, declare_topology
 from ai_workflow_rag.messaging.validation import EnvelopeValidationError
 from ai_workflow_rag.worker.ingestion_handler import (
     IngestionCommandHandler,
@@ -82,7 +82,7 @@ async def run_worker() -> None:
         channel=channel,
     )
 
-    queue = await channel.declare_queue(mq.INGESTION_COMMANDS_QUEUE, durable=True)
+    queue = await declare_ingestion_queue(channel)
 
     async def on_message(message: aio_pika.abc.AbstractIncomingMessage) -> None:
         asyncio.create_task(_handle_message(handler, message))

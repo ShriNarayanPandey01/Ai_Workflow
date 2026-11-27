@@ -33,6 +33,7 @@ public class RabbitTopologyConfig {
     Queue executionCommandsQueue() {
         return QueueBuilder.durable(MessagingNames.EXECUTION_COMMANDS_QUEUE)
                 .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", "rejected")
                 .build();
     }
 
@@ -40,6 +41,7 @@ public class RabbitTopologyConfig {
     Queue ingestionCommandsQueue() {
         return QueueBuilder.durable(MessagingNames.INGESTION_COMMANDS_QUEUE)
                 .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", "rejected")
                 .build();
     }
 
@@ -47,6 +49,7 @@ public class RabbitTopologyConfig {
     Queue taskCommandsQueue() {
         return QueueBuilder.durable(MessagingNames.TASK_COMMANDS_QUEUE)
                 .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", "rejected")
                 .build();
     }
 
@@ -54,6 +57,7 @@ public class RabbitTopologyConfig {
     Queue controlEventsQueue() {
         return QueueBuilder.durable(MessagingNames.CONTROL_EVENTS_QUEUE)
                 .withArgument("x-dead-letter-exchange", MessagingNames.DEAD_LETTER_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", "rejected")
                 .build();
     }
 

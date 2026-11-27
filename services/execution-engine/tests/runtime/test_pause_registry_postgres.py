@@ -13,9 +13,9 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio
-async def test_pause_state_is_shared_and_stale_commands_are_ignored() -> None:
+async def test_pause_state_is_shared_and_stale_commands_are_ignored(integration_database_url) -> None:
     try:
-        pool = await create_pool("postgresql://aiw:aiw@localhost:5432/aiw")
+        pool = await create_pool(integration_database_url)
     except (OSError, asyncpg.PostgresError) as exc:
         pytest.skip(f"Postgres unavailable: {exc}")
     try:

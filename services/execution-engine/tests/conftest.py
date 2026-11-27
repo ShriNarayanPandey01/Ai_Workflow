@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 
 from ai_workflow.config.settings import REPO_ROOT, Settings
+
+
+@pytest.fixture
+def integration_database_url() -> str:
+    return os.environ.get("AIW_TEST_DATABASE_URL", "postgresql://aiw:aiw@localhost:5432/aiw")
 
 
 @pytest.fixture

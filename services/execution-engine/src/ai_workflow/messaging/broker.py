@@ -138,6 +138,7 @@ class RabbitBroker:
         control_events_queue = await channel.declare_queue(
             names.CONTROL_EVENTS_QUEUE,
             durable=True,
+            arguments=self._durable_queue_arguments(),
         )
         await control_events_queue.bind(
             events_exchange, routing_key=names.CONTROL_EVENTS_BINDING

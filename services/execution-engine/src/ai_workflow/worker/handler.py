@@ -103,6 +103,7 @@ async def _publish_outcome(
             node_id=outcome.node_id,
             approval_request=outcome.approval_request,
             approval_id=outcome.approval_id,
+            task_ref=outcome.task_ref,
         )
         return
 
@@ -240,14 +241,14 @@ class ExecutionCommandHandler:
             source_envelope=parsed.envelope,
             subject=parsed.subject,
         )
-        if claim is ClaimResult.NEW and await publisher.get_last_sequence() == 0:
-            await publisher.publish_execution_started()
-
-        existing = await checkpointer.load(thread_id=parsed.subject.run_id)
         lease_acquired = False
         try:
             await self._acquire_lease(parsed.subject.run_id)
             lease_acquired = True
+            if claim is ClaimResult.NEW and await publisher.get_last_sequence() == 0:
+                await publisher.publish_execution_started()
+
+            existing = await checkpointer.load(thread_id=parsed.subject.run_id)
             if existing is not None and get_interrupt(existing) is not None:
                 logger.info(
                     "Skipping execution.start for waiting run %s",
